@@ -23,24 +23,30 @@ REMOTE_ADDRESS=foreign.server.com:/path/to/backups
 SOURCES=(/root /etc /boot )
 
 # edit or comment with "#"
-DATEPATTERN=+%y%m%d
+DATEPATTERN=+%y%m%d%M%S
 RSYNCCONF=(-AHS --delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
-# yet unused.
+RSYNCCONF=(--delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
+
 # to whom to send a mail
 MAILREC="me@host.com"
 # both need to be defined jointly
-SSH="yes"
+USE_SSH="no"
 # The test is 
 # if ()(SSHUSER && SSHPORT) || SSHKEY_COPIED)
-#SSHUSER="me"
-#SSHPORT="22"
+SSHUSER=`whoami`
+SSHPORT="22"
 #SSHKEY_COPIED=1
 
+# one of those need to be defined!
 #FROMSSH="source.server.com"
 #TOSSH="target.server.com"
+FROMSSH=""
+TOSSH=""
 
 ### do not edit ###
+# init variables
 ERROR=0
+
 if [ $# -gt 0 ]; then
 	# include the parameters from the first argument (pointing to a file) if give if given
 	echo "$0: Including definitions from $1 ..."
@@ -56,21 +62,50 @@ LAST="last"; INC="--link-dest=../$LAST"
 set -e # Abort on error
 set -u # Abort when unbound variables are used
 
-P_MOUNT_IF_UNMOUNTED=1
-
 LOCKFILE=$0.lock
 DETAILLOG=`tempfile`
 SUMMARYLOG=`tempfile`
 $DATE > $DETAILLOG
 $DATE > $SUMMARYLOG
 
+#
+# called on script end.
+function cleanup() {
+	echo -n "$0: Cleaning temporary files... "
+	rm -f ${LOCKFILE}
+	rm -f ${DETAILLOG}
+	rm -r ${SUMMARYLOG}
+	echo "OK"
+}
+
+# errorous end of the script. shows an error message and returns a value != 0,  passed as first argument.
+function mexit() {
+	echo "$0: Error. Some error occurred while performing the backup."
+	cleanup
+
+	exit $1
+}
+
 # check temp temp file. I won't start the backup if this file exists.
 # 
 if [ -f ${LOCKFILE} ]; then
 	echo "$0: It appears as if a backup is already running (File ${LOCKFILE} esists). Stopping here. Maybe delete the lock file if you know what you are doing..."
-	exit 1
+	mexit 1
 fi
 touch ${LOCKFILE}
+
+if [ ${USE_SSH} = "yes" ]; then
+	echo "$0: checking ssh configuration ..."
+	if [ -z $FROMSSH ] && [ -z $TOSSH ]; then
+		echo "$0: Error: Both \$FROMSSH and \$TOSSH are empty. One of them needs to be set!"
+		mexit 2
+	fi
+	if [ $FROMSSH ] && [ $TOSSH ]; then
+		echo "$0: Error: Both \$FROMSSH and \$TOSSH are set to some values. One of them needs to be set, the other needs to be an empty string!"
+		mexit 2
+	fi
+fi
+
 
 #
 # check mountpoint / target location
@@ -81,8 +116,6 @@ touch ${LOCKFILE}
 #else
 #	mount -t nfs -o nfsvers=3 ${REMOTE_ADDRESS} ${MOUNTPOINT}
 #fi
-
-
 
 if [ "${TARGET:${#TARGET}-1:1}" != "/" ]; then
   TARGET=$TARGET/
@@ -111,10 +144,12 @@ echo "$0: Target is $TARGET"
 if [ 1 = 1 ]; then
   TODAY=$($DATE ${DATEPATTERN})
 	S=""
-	if [ ${SSH} = "yes" ]; then
+	if [ ${USE_SSH} = "yes" ]; then
+		echo -n "$0: Configuring SSH ... "
 	  if [ "$SSHUSER" ] && [ "$SSHPORT" ]; then
-  	  S="--rsh='$SSH -p $SSHPORT -l $SSHUSER'";
+  	  S="$SSH -p $SSHPORT -l $SSHUSER";
 	  fi
+		echo $S
 #		if [ -z ${S} ] && ${SSHKEY_COPIED} ; then
 			# simply define the variable
 #			S=""
@@ -123,18 +158,22 @@ if [ 1 = 1 ]; then
   for SOURCE in "${SOURCES[@]}"
     do
       echo ${SOURCE} >> $SUMMARYLOG
-      if [ "$S" ] && [ "$FROMSSH" ] && [ -z "$TOSSH" ]; then
+      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
 				# SSH connection from a host,  to local
         $ECHO "$RSYNC \"$S\" -axvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC"  >> $DETAILLOG
-#        $RSYNC -e "$S" -axvR "$FROMSSH:\"$SOURCE\"" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC >> $LOG 2>&1
+ 				$RSYNC -e "$S" -axvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
+
         if [ $? -ne 0 ]; then
           ERROR=1
         fi
       fi
-      if [ "$S" ]  && [ "$TOSSH" ] && [ -z "$FROMSSH" ]; then
+      if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
 				# ssh connection to a server,  from local
-        $ECHO "$RSYNC \"$S\" -axvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $DETAILLOG
-#        $RSYNC -e "$S" -axvR "$SOURCE" "${RSYNCCONF[@]}" "$TOSSH:\"$TARGET\"$TODAY" $INC >> $LOG 2>&1 
+				echo "from local"
+        $ECHO "$RSYNC -e \"$S\" -axvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC "
+				#>> $DETAILLOG
+        $RSYNC -e "$S" ${TOSSH} -axvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC 
+				#>> $DETAILLOG 2>&1 
         if [ $? -ne 0 ]; then
           ERROR=1
         fi
@@ -183,9 +222,8 @@ if [ -n "$MAILREC" ]; then
     $MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
   fi
 fi
-rm -f ${LOCKFILE}
-rm -f ${DETAILLOG}
-rm -r ${SUMMARYLOG}
+
+cleanup
 
 #if [ ${UNMOUNT_IF_AUTOMATICALLY_MOUNTED} ] && [ ${MOUNT_IF_UNMOUNTED} ]; then
 #	umount ${MOUNTPOINT}
