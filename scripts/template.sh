@@ -169,10 +169,10 @@ if [ 1 = 1 ]; then
       fi
       if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
 				# ssh connection to a server,  from local
-				echo "from local"
+				echo "$0: from local"
         $ECHO "$RSYNC -e \"$S\" -axvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC "
 				#>> $DETAILLOG
-        $RSYNC -e "$S" ${TOSSH} -axvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC 
+        $RSYNC -e "$S"  -axvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC 
 				#>> $DETAILLOG 2>&1 
         if [ $? -ne 0 ]; then
           ERROR=1
