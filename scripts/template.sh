@@ -23,14 +23,13 @@ REMOTE_ADDRESS=foreign.server.com:/path/to/backups
 SOURCES=(/root /etc /boot )
 
 # edit or comment with "#"
-#LISTPACKAGES=listdebianpackages        # local-mode and tossh-mode
-#MONTHROTATE=monthrotate                 # use DD instead of YYMMDD
 DATEPATTERN=+%y%m%d
 RSYNCCONF=(-AHS --delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
 # yet unused.
 # to whom to send a mail
 MAILREC="me@host.com"
 # both need to be defined jointly
+SSH="yes"
 # The test is 
 # if ()(SSHUSER && SSHPORT) || SSHKEY_COPIED)
 #SSHUSER="me"
@@ -41,7 +40,7 @@ MAILREC="me@host.com"
 #TOSSH="target.server.com"
 
 ### do not edit ###
-
+ERROR=0
 if [ $# -gt 0 ]; then
 	# include the parameters from the first argument (pointing to a file) if give if given
 	echo "$0: Including definitions from $1 ..."
@@ -50,7 +49,7 @@ fi
 
 MOUNT="/bin/mount"; FGREP="/bin/fgrep"; SSH="/usr/bin/ssh"
 LN="/bin/ln"; ECHO="/bin/echo"; DATE="/bin/date"; RM="/bin/rm"
-AWK="/usr/bin/awk"; MAIL="/bin/mail"
+AWK="/usr/bin/awk"; MAIL="/usr/bin/mail"
 RSYNC="/usr/bin/rsync"
 LAST="last"; INC="--link-dest=../$LAST"
 
@@ -59,7 +58,7 @@ set -u # Abort when unbound variables are used
 
 P_MOUNT_IF_UNMOUNTED=1
 
-LOCKFILE=/tmp/$0.lock
+LOCKFILE=$0.lock
 DETAILLOG=`tempfile`
 SUMMARYLOG=`tempfile`
 $DATE > $DETAILLOG
@@ -90,33 +89,37 @@ if [ "${TARGET:${#TARGET}-1:1}" != "/" ]; then
 fi
 echo "$0: Target is $TARGET"
 
-if [ "$MOUNTPOINT" ]; then # variable MOUNTPOINT if define, thus ...
+#if [ "$MOUNTPOINT" ]; then # variable MOUNTPOINT if define, thus ...
 	# check whether it is actually mounted
-  MOUNTED=$($MOUNT | $FGREP "$MOUNTPOINT");
-	if [ -z ${MOUNTED} ]; then # if it is not mounted, then ...
-		# try to mount it:
-		mount "$MOUNTPOINT"
-		if [ ! $? = 0 ]; then # if the mount fails ...
-			ERROR=1
+#  MOUNTED=$($MOUNT | $FGREP "$MOUNTPOINT");
+#	if [ -z ${MOUNTED} ]; then # if it is not mounted, then ...
+#		# try to mount it:
+#		mount "$MOUNTPOINT"
+#		if [ ! $? = 0 ]; then # if the mount fails ...
+#			ERROR=1
 			# tell the user  
-			echo "$0: failed to mount $MOUNTPOINT. Does it exist in /etc/fstab?"
-		else
-			P_MOUNT_IF_UNMOUNTED=1
-		fi
-	fi
-else
-	echo "$0: No mountpoint given. Assuming local backup"
-fi
+#			echo "$0: failed to mount $MOUNTPOINT. Does it exist in /etc/fstab?"
+#		else
+#			P_MOUNT_IF_UNMOUNTED=1
+#		fi
+#	fi
+#else
+#	echo "$0: No mountpoint given. Assuming local backup"
+#fi
 
-if [ -z "$MOUNTPOINT" ] || [ "$MOUNTED" ]; then
+#if [ -z "$MOUNTPOINT" ] || [ "$MOUNTED" ]; then
+if [ 1 = 1 ]; then
   TODAY=$($DATE ${DATEPATTERN})
-  if [ "$SSHUSER" ] && [ "$SSHPORT" ]; then
-    S="--rsh='$SSH -p $SSHPORT -l $SSHUSER'";
-  fi
-	if [ -z ${S} ] && ${SSHKEY_COPIED} ; then
-		# simply define the variable
-		S=""
-	fi
+	S=""
+	if [ ${SSH} = "yes" ]; then
+	  if [ "$SSHUSER" ] && [ "$SSHPORT" ]; then
+  	  S="--rsh='$SSH -p $SSHPORT -l $SSHUSER'";
+	  fi
+#		if [ -z ${S} ] && ${SSHKEY_COPIED} ; then
+			# simply define the variable
+#			S=""
+#		fi
+	fi # of ${SSH} = yes
   for SOURCE in "${SOURCES[@]}"
     do
       echo ${SOURCE} >> $SUMMARYLOG
@@ -147,7 +150,7 @@ if [ -z "$MOUNTPOINT" ] || [ "$MOUNTED" ]; then
           ERROR=1
         fi
       fi
-    $DATE >> $MAILLOG
+    $DATE >> $SUMMARYLOG
   done
 
   if [ "$S" ] && [ "$TOSSH" ] && [ -z "$FROMSSH" ]; then
@@ -173,17 +176,17 @@ if [ -n "$MAILREC" ]; then
 #  echo "should send email"
   if [ $ERROR ];then
     
-    $MAIL -s "Error Backup $LOG" $MAILREC < $SUMMARYLOG
+    $MAIL -s "Error Backup $0 $1" $MAILREC < $SUMMARYLOG
   else
     echo "Backup complete" >> $SUMMARYLOG
     echo "Backup complete" >> $DETAILLOG
-    $MAIL -s "Backup `hostname` $LOG" $MAILREC < $SUMMARYLOG
+    $MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
   fi
 fi
-rm -f /tmp/$0.tmp
+rm -f ${LOCKFILE}
 rm -f ${DETAILLOG}
 rm -r ${SUMMARYLOG}
 
-if [ ${UNMOUNT_IF_AUTOMATICALLY_MOUNTED} ] && [ ${MOUNT_IF_UNMOUNTED} ]; then
-	umount ${MOUNTPOINT}
-fi
+#if [ ${UNMOUNT_IF_AUTOMATICALLY_MOUNTED} ] && [ ${MOUNT_IF_UNMOUNTED} ]; then
+#	umount ${MOUNTPOINT}
+#fi
