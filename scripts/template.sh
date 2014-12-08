@@ -4,21 +4,15 @@
 
 #
 # return values
+#   0 all fine
 #   1 current backup ongoing
+#   2 SSH configuration error
+#   3 An error ocurred during rsync
+#   4 An error ocurred during ln of the new backup folder
 
-# target directory where to make backups.
-# this is a root path; the actual target (sub-)directory is defined in the next variable)
-#
-#MOUNTPOINT=/path/to/mount/locally
-# simply uncomment this (undefine the variable) if you don't want to make backups if the target is not mounted.
-MOUNT_IF_UNMOUNTED=1
-# if MOUNT_IF_UNMOUNTED=1 and a manual mount happened, unmount the mountpoint afterwards.
-UNMOUNT_IF_AUTOMATICALLY_MOUNTED=1
 # actual backup directory
-TARGET=${MOUNTPOINT}"/dailyBackups"
+TARGET="/some/path/to/dailyBackups"
 
-# remote adress, where to make backups to
-REMOTE_ADDRESS=foreign.server.com:/path/to/backups
 # array of source folders to make a backup from
 SOURCES=(/root /etc /boot )
 
@@ -46,6 +40,7 @@ TOSSH=""
 ### do not edit ###
 # init variables
 ERROR=0
+LOGDATEPATTERN=+%Y%m%d%H%M%S
 
 if [ $# -gt 0 ]; then
 	# include the parameters from the first argument (pointing to a file) if give if given
@@ -65,8 +60,8 @@ set -u # Abort when unbound variables are used
 LOCKFILE=$0.lock
 DETAILLOG=`tempfile`
 SUMMARYLOG=`tempfile`
-$DATE > $DETAILLOG
-$DATE > $SUMMARYLOG
+echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $DETAILLOG
+echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $SUMMARYLOG
 
 #
 # called on script end.
@@ -81,6 +76,8 @@ function cleanup() {
 # errorous end of the script. shows an error message and returns a value != 0,  passed as first argument.
 function mexit() {
 	echo "$0: Error. Some error occurred while performing the backup."
+	$MAIL -s "Error Backup $0 $1" $MAILREC < $SUMMARYLOG
+
 	cleanup
 
 	exit $1
@@ -106,7 +103,6 @@ if [ ${USE_SSH} = "yes" ]; then
 	fi
 fi
 
-
 #
 # check mountpoint / target location
 #
@@ -122,109 +118,82 @@ if [ "${TARGET:${#TARGET}-1:1}" != "/" ]; then
 fi
 echo "$0: Target is $TARGET"
 
-#if [ "$MOUNTPOINT" ]; then # variable MOUNTPOINT if define, thus ...
-	# check whether it is actually mounted
-#  MOUNTED=$($MOUNT | $FGREP "$MOUNTPOINT");
-#	if [ -z ${MOUNTED} ]; then # if it is not mounted, then ...
-#		# try to mount it:
-#		mount "$MOUNTPOINT"
-#		if [ ! $? = 0 ]; then # if the mount fails ...
-#			ERROR=1
-			# tell the user  
-#			echo "$0: failed to mount $MOUNTPOINT. Does it exist in /etc/fstab?"
-#		else
-#			P_MOUNT_IF_UNMOUNTED=1
-#		fi
-#	fi
-#else
-#	echo "$0: No mountpoint given. Assuming local backup"
-#fi
-
-#if [ -z "$MOUNTPOINT" ] || [ "$MOUNTED" ]; then
-if [ 1 = 1 ]; then
-  TODAY=$($DATE ${DATEPATTERN})
-	S=""
-	if [ ${USE_SSH} = "yes" ]; then
-		echo -n "$0: Configuring SSH ... "
-	  if [ "$SSHUSER" ] && [ "$SSHPORT" ]; then
-  	  S="$SSH -p $SSHPORT -l $SSHUSER";
-	  fi
-		echo $S
+TODAY=$($DATE ${DATEPATTERN})
+S=""
+if [ ${USE_SSH} = "yes" ]; then
+	echo -n "$0: Configuring SSH ... "
+  if [ "$SSHUSER" ] && [ "$SSHPORT" ]; then
+ 	  S="$SSH -p $SSHPORT -l $SSHUSER";
+  fi
+	echo $S
 #		if [ -z ${S} ] && ${SSHKEY_COPIED} ; then
 			# simply define the variable
 #			S=""
 #		fi
-	fi # of ${SSH} = yes
-  for SOURCE in "${SOURCES[@]}"
-    do
-      echo ${SOURCE} >> $SUMMARYLOG
-      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
-				# SSH connection from a host,  to local
-        $ECHO "$RSYNC \"$S\" -axvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC"  >> $DETAILLOG
- 				$RSYNC -e "$S" -axvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
-
-        if [ $? -ne 0 ]; then
-          ERROR=1
-        fi
-      fi
-      if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
-				# ssh connection to a server,  from local
-				echo "$0: from local"
-        $ECHO "$RSYNC -e \"$S\" -axvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC "
-				#>> $DETAILLOG
-        $RSYNC -e "$S"  -axvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC 
-				#>> $DETAILLOG 2>&1 
-        if [ $? -ne 0 ]; then
-          ERROR=1
-        fi
-      fi
-      if [ -z "$S" ]; then
-				# no ssh connection; backup locally
-        $ECHO "$RSYNC -axvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC"  >> $SUMMARYLOG 
-        $RSYNC -axvR "$SOURCE" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC  >> $DETAILLOG 2>&1 
-				status=$?
-				echo `du "$TARGET"$TODAY` >> $SUMMARYLOG 2>&1
-        if [ $status -ne 0 ]; then
-				  echo $status >> $SUMMARYLOG
-          ERROR=1
-        fi
-      fi
-    $DATE >> $SUMMARYLOG
-  done
-
-  if [ "$S" ] && [ "$TOSSH" ] && [ -z "$FROMSSH" ]; then
-    $ECHO "$SSH -p $SSHPORT -l $SSHUSER $TOSSH $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG  
-    $SSH -p $SSHPORT -l $SSHUSER $TOSSH "$LN -nsf \"$TARGET\"$TODAY \"$TARGET\"$LAST" >> $DETAILLOG 2>&1
-    if [ $? -ne 0 ]; then
-      ERROR=1
+fi # of ${SSH} = yes
+for SOURCE in "${SOURCES[@]}"
+  do
+		backup_status=0
+		echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
+     if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
+			# SSH connection from a host,  to local
+      $ECHO "$0: $RSYNC -e \"$S\" -axvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG
+			$RSYNC -e "$S" -axvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
+			backup_status=$?
     fi
-  fi
-  if ( [ "$S" ] && [ "$FROMSSH" ] && [ -z "$TOSSH" ] ) || ( [ -z "$S" ] );  then
-    $ECHO "$LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG
-    $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST  >> $DETAILLOG 2>&1
-    if [ $? -ne 0 ]; then
-      ERROR=1
+    if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
+			# ssh connection to a server,  from local
+      $ECHO "$0: $RSYNC -e \"$S\" -axvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
+      $RSYNC -e "$S"  -axvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC >> $DETAILLOG 2>&1 
+			backup_status=$?
     fi
-  fi
-else
-  $ECHO "$0: $MOUNTPOINT not mounted" >> $SUMMARYLOG
-  ERROR=1
+    if [ -z "$S" ]; then
+			# no ssh connection; backup locally
+      $ECHO "$0: $RSYNC -axvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG 
+      $RSYNC -axvR "$SOURCE" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC  >> $DETAILLOG 2>&1 
+			backup_status=$?
+			echo "$0: Backup size of ${SOURCE} is "`du "$TARGET"$TODAY` >> $SUMMARYLOG 2>&1
+    fi
+		if [ ! ${backup_status} = 0 ]; then
+			echo "$0: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
+			ERROR=3
+		fi
+done
+
+echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `}" >> $SUMMARYLOG
+
+if [ ! ${ERROR} = 0 ]; then
+	mexit ${ERROR}
+fi
+
+# do not create new links if an error occurred ...
+if [ "$S" ] && [ "$TOSSH" ] && [ -z "$FROMSSH" ]; then
+ 	$ECHO "$0: $SSH -p $SSHPORT -l $SSHUSER $TOSSH $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG  
+  $SSH -p $SSHPORT -l $SSHUSER $TOSSH "$LN -nsf \"$TARGET\"$TODAY \"$TARGET\"$LAST" >> $DETAILLOG 2>&1
+ 	if [ $? -ne 0 ]; then
+    ERROR=4
+ 	fi
+fi
+if ( [ "$S" ] && [ "$FROMSSH" ] && [ -z "$TOSSH" ] ) || ( [ -z "$S" ] );  then
+ 	$ECHO "$0: $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG
+  $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST  >> $DETAILLOG 2>&1
+ 	if [ $? -ne 0 ]; then
+    ERROR=4
+ 	fi
+fi
+
+if [ ! ${ERROR} = 0 ]; then
+  mexit ${ERROR}
 fi
 
 if [ -n "$MAILREC" ]; then
-#  echo "should send email"
-  if [ $ERROR ];then
-    
-    $MAIL -s "Error Backup $0 $1" $MAILREC < $SUMMARYLOG
-  else
-    echo "Backup complete" >> $SUMMARYLOG
-    echo "Backup complete" >> $DETAILLOG
-    $MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
-  fi
+	echo "Backup complete" >> $SUMMARYLOG
+	$MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
 fi
+
+echo "$0: Now dumping the summary file..."
+cat $SUMMARYLOG
 
 cleanup
 
-#if [ ${UNMOUNT_IF_AUTOMATICALLY_MOUNTED} ] && [ ${MOUNT_IF_UNMOUNTED} ]; then
-#	umount ${MOUNTPOINT}
-#fi
+exit 0
