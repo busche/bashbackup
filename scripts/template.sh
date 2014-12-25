@@ -58,8 +58,8 @@ set -e # Abort on error
 set -u # Abort when unbound variables are used
 
 LOCKFILE=$0.lock
-DETAILLOG=`tempfile`
-SUMMARYLOG=`tempfile`
+DETAILLOG=`mktemp /tmp/detail_XXXXXXXX`
+SUMMARYLOG=`mktemp /tmp/summary_XXXXXXXX`
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $DETAILLOG
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $SUMMARYLOG
 
