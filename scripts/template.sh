@@ -50,7 +50,14 @@ fi
 
 MOUNT="/bin/mount"; FGREP="/bin/fgrep"; SSH="/usr/bin/ssh"
 LN="/bin/ln"; ECHO="/bin/echo"; DATE="/bin/date"; RM="/bin/rm"
-AWK="/usr/bin/awk"; MAIL="/usr/bin/mail"
+AWK="/usr/bin/awk"; 
+MAIL=`which mail`
+if [ 'x'${MAIL} = 'x' ]; then
+	# no mail program found!
+	echo "$0: no mail program found. Not sending any mail!"
+	unset MAILREC	
+fi 
+#"/usr/bin/mail"
 RSYNC="/usr/bin/rsync"
 LAST="last"; INC="--link-dest=../$LAST"
 
