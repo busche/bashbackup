@@ -17,7 +17,7 @@ TARGET="/some/path/to/dailyBackups"
 SOURCES=(/root /etc /boot )
 
 # edit or comment with "#"
-DATEPATTERN=+%y%m%d%M%S
+DATEPATTERN=+%Y%m%d_%H%M%S
 RSYNCCONF=(-AHS --delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
 RSYNCCONF=(--delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
 
