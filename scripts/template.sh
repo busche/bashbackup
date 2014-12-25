@@ -173,6 +173,11 @@ if [ ! ${ERROR} = 0 ]; then
 	mexit ${ERROR}
 fi
 
+if [ -z "$S" ]; then
+	cp ${DETAILLOG} ${TARGET}/${TODAY}/"detail.log"
+	chmod a+r  ${TARGET}/${TODAY}/"detail.log"
+fi
+
 # do not create new links if an error occurred ...
 if [ "$S" ] && [ "$TOSSH" ] && [ -z "$FROMSSH" ]; then
  	$ECHO "$0: $SSH -p $SSHPORT -l $SSHUSER $TOSSH $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG  
