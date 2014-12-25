@@ -194,7 +194,8 @@ if [ ! ${ERROR} = 0 ]; then
 fi
 
 if [ -n "$MAILREC" ]; then
-	echo "Backup complete" >> $SUMMARYLOG
+	echo "$0: Sending mail to $MAILREC ..."
+	echo "$0: Backup complete" >> $SUMMARYLOG
 	$MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
 fi
 
