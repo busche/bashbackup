@@ -167,7 +167,7 @@ for SOURCE in "${SOURCES[@]}"
 		fi
 done
 
-echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `}" >> $SUMMARYLOG
+echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `" >> $SUMMARYLOG
 
 if [ ! ${ERROR} = 0 ]; then
 	mexit ${ERROR}
