@@ -159,7 +159,7 @@ for SOURCE in "${SOURCES[@]}"
       $ECHO "$0: $RSYNC -axvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG 
       $RSYNC -axvR "$SOURCE" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC  >> $DETAILLOG 2>&1 
 			backup_status=$?
-			echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY` >> $SUMMARYLOG 2>&1
+			echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY"${SOURCE}"` >> $SUMMARYLOG 2>&1
     fi
 		if [ ! ${backup_status} = 0 ]; then
 			echo "$0: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
