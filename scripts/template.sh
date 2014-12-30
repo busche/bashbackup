@@ -9,6 +9,8 @@
 #   2 SSH configuration error
 #   3 An error ocurred during rsync
 #   4 An error ocurred during ln of the new backup folder
+#   5 If rsync was not found.
+#   6 If ssh was not found.
 
 # actual backup directory
 TARGET="/some/path/to/dailyBackups"
@@ -48,7 +50,13 @@ if [ $# -gt 0 ]; then
 	. $1
 fi
 
-MOUNT="/bin/mount"; FGREP="/bin/fgrep"; SSH="/usr/bin/ssh"
+MOUNT="/bin/mount"; FGREP="/bin/fgrep"
+SSH=`which ssh`
+if [ 'x' = 'x'${SSH} ]; then
+        echo "$0: fatal: no ssh found."
+        exit 6
+fi
+
 LN="/bin/ln"; ECHO="/bin/echo"; DATE="/bin/date"; RM="/bin/rm"
 AWK="/usr/bin/awk"; 
 MAIL=`which mail`
@@ -58,15 +66,28 @@ if [ 'x'${MAIL} = 'x' ]; then
 	unset MAILREC	
 fi 
 #"/usr/bin/mail"
-RSYNC="/usr/bin/rsync"
+MKTEMP=`which mktemp`
+if [ 'x' = 'x'${MKTEMP} ]; then
+	echo "$0: no mktemp command found. Using fake log files (in place!)"
+	DETAILLOG=$0.detail.log
+	SUMMARYLOG=$0.summary.log
+else 
+	DETAILLOG=`mktemp /tmp/detail_XXXXXXXX`
+	SUMMARYLOG=`mktemp /tmp/summary_XXXXXXXX`
+
+fi
+RSYNC=`which rsync`
+if [ 'x'${RSYNC} = 'x' ]; then
+	echo "$0: fatal: no rsync found."
+	exit 5
+fi 
+
 LAST="last"; INC="--link-dest=../$LAST"
 
 set -e # Abort on error
 set -u # Abort when unbound variables are used
 
 LOCKFILE=$0.lock
-DETAILLOG=`mktemp /tmp/detail_XXXXXXXX`
-SUMMARYLOG=`mktemp /tmp/summary_XXXXXXXX`
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $DETAILLOG
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $SUMMARYLOG
 
@@ -83,8 +104,9 @@ function cleanup() {
 # errorous end of the script. shows an error message and returns a value != 0,  passed as first argument.
 function mexit() {
 	echo "$0: Error. Some error occurred while performing the backup."
-	$MAIL -s "Error Backup $0 $1" $MAILREC < $SUMMARYLOG
-
+	if [ ! 'x'${MAIL} = 'x' ]; then
+		$MAIL -s "Error Backup $0 $1" $MAILREC < $SUMMARYLOG
+	fi
 	cleanup
 
 	exit $1
@@ -140,6 +162,7 @@ if [ ${USE_SSH} = "yes" ]; then
 fi # of ${SSH} = yes
 for SOURCE in "${SOURCES[@]}"
   do
+  echo $SOURCE
 		backup_status=0
 		echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
@@ -198,7 +221,7 @@ if [ ! ${ERROR} = 0 ]; then
   mexit ${ERROR}
 fi
 
-if [ -n "$MAILREC" ]; then
+if [ ! 'x'${MAIL} = 'x' ]; then
 	echo "$0: Sending mail to $MAILREC ..."
 	echo "$0: Backup complete" >> $SUMMARYLOG
 	$MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
