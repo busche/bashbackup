@@ -20,8 +20,13 @@ SOURCES=(/root /etc /boot )
 
 # edit or comment with "#"
 DATEPATTERN=+%Y%m%d_%H%M%S
-RSYNCCONF=(-AHS --delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
-RSYNCCONF=(--delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
+if [ 'x'$OSTYPE = 'xcygwin' ]; then
+	echo "$0: I am running in a cygwin environment!"
+	RSYNCCONF=(-HS -rltD --delete)
+else
+	echo "$0: Running in a Linux environment."
+RSYNCCONF=(-AHS -a --delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
+fi
 
 # to whom to send a mail
 MAILREC="me@host.com"
@@ -43,6 +48,27 @@ TOSSH=""
 # init variables
 ERROR=0
 LOGDATEPATTERN=+%Y%m%d%H%M%S
+
+#
+# called on script end.
+function cleanup() {
+	echo -n "$0: Cleaning temporary files... "
+	rm -f ${LOCKFILE}
+	rm -f ${DETAILLOG}
+	rm -r ${SUMMARYLOG}
+	echo "OK"
+}
+
+# errorous end of the script. shows an error message and returns a value != 0,  passed as first argument.
+function mexit() {
+	echo "$0: Error. Some error occurred while performing the backup."
+	if [ ! 'x'${MAIL} = 'x' ]; then
+		$MAIL -s "Error Backup $0 $1" $MAILREC < $SUMMARYLOG
+	fi
+	cleanup
+
+	exit $1
+}
 
 if [ $# -gt 0 ]; then
 	# include the parameters from the first argument (pointing to a file) if give if given
@@ -90,27 +116,6 @@ set -u # Abort when unbound variables are used
 LOCKFILE=$0.lock
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $DETAILLOG
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $SUMMARYLOG
-
-#
-# called on script end.
-function cleanup() {
-	echo -n "$0: Cleaning temporary files... "
-	rm -f ${LOCKFILE}
-	rm -f ${DETAILLOG}
-	rm -r ${SUMMARYLOG}
-	echo "OK"
-}
-
-# errorous end of the script. shows an error message and returns a value != 0,  passed as first argument.
-function mexit() {
-	echo "$0: Error. Some error occurred while performing the backup."
-	if [ ! 'x'${MAIL} = 'x' ]; then
-		$MAIL -s "Error Backup $0 $1" $MAILREC < $SUMMARYLOG
-	fi
-	cleanup
-
-	exit $1
-}
 
 # check temp temp file. I won't start the backup if this file exists.
 # 
@@ -167,20 +172,20 @@ for SOURCE in "${SOURCES[@]}"
 		echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
 			# SSH connection from a host,  to local
-      $ECHO "$0: $RSYNC -e \"$S\" -axvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG
-			$RSYNC -e "$S" -axvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
+      $ECHO "$0: $RSYNC -e \"$S\" -xvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG
+			$RSYNC -e "$S" -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
 			backup_status=$?
     fi
     if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
 			# ssh connection to a server,  from local
-      $ECHO "$0: $RSYNC -e \"$S\" -axvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
-      $RSYNC -e "$S"  -axvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC >> $DETAILLOG 2>&1 
+      $ECHO "$0: $RSYNC -e \"$S\" -xvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
+      $RSYNC -e "$S"  -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC >> $DETAILLOG 2>&1 
 			backup_status=$?
     fi
     if [ -z "$S" ]; then
 			# no ssh connection; backup locally
-      $ECHO "$0: $RSYNC -axvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG 
-      $RSYNC -axvR "$SOURCE" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC  >> $DETAILLOG 2>&1 
+      $ECHO "$0: $RSYNC -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG 
+      $RSYNC -xvR "$SOURCE" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC  >> $DETAILLOG 2>&1 
 			backup_status=$?
 			echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY"${SOURCE}"` >> $SUMMARYLOG 2>&1
     fi
@@ -194,6 +199,12 @@ echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `" >> $SUMMARYLOG
 
 if [ ! ${ERROR} = 0 ]; then
 	mexit ${ERROR}
+fi
+
+# copy log file.
+if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
+	# ssh connection to a server,  from local
+	scp -P $SSHPORT ${DETAILLOG} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/"detail.log"
 fi
 
 if [ -z "$S" ]; then
