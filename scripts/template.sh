@@ -25,8 +25,10 @@ if [ 'x'$OSTYPE = 'xcygwin' ]; then
 	RSYNCCONF=(-HS -rltD --delete)
 else
 	echo "$0: Running in a Linux environment."
-RSYNCCONF=(-AHS -a --delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
+	RSYNCCONF=(-AHS -a --delete)
 fi
+# dummy initialization
+SYNCOPTS=""
 
 # to whom to send a mail
 MAILREC="me@host.com"
@@ -36,7 +38,6 @@ USE_SSH="no"
 # if ()(SSHUSER && SSHPORT) || SSHKEY_COPIED)
 SSHUSER=`whoami`
 SSHPORT="22"
-#SSHKEY_COPIED=1
 
 # one of those need to be defined!
 #FROMSSH="source.server.com"
@@ -110,6 +111,14 @@ fi
 
 LAST="last"; INC="--link-dest=../$LAST"
 
+DRY_RUN=0
+for OPT in "${RSYNCCONF[@]}" "${RSYNCOPTS[@]}"]} ; do
+	if [ $OPT = '--dry-run' ]; then
+		echo "$0: --dry-run detected."
+		DRY_RUN=1
+	fi
+done
+
 set -e # Abort on error
 set -u # Abort when unbound variables are used
 
@@ -172,20 +181,20 @@ for SOURCE in "${SOURCES[@]}"
 		echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
 			# SSH connection from a host,  to local
-      $ECHO "$0: $RSYNC -e \"$S\" -xvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG
-			$RSYNC -e "$S" -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
+      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS} } -xvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG
+			$RSYNC -e "$S" ${RSYNCOPTS} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
 			backup_status=$?
     fi
     if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
 			# ssh connection to a server,  from local
-      $ECHO "$0: $RSYNC -e \"$S\" -xvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
-      $RSYNC -e "$S"  -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC >> $DETAILLOG 2>&1 
+      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS} -xvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
+      $RSYNC -e "$S"  ${RSYNCOPTS} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC >> $DETAILLOG 2>&1 
 			backup_status=$?
     fi
     if [ -z "$S" ]; then
 			# no ssh connection; backup locally
-      $ECHO "$0: $RSYNC -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG 
-      $RSYNC -xvR "$SOURCE" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC  >> $DETAILLOG 2>&1 
+      $ECHO "$0: $RSYNC ${RSYNCOPTS} -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG 
+      $RSYNC ${RSYNCOPTS} -xvR "$SOURCE" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC  >> $DETAILLOG 2>&1 
 			backup_status=$?
 			echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY"${SOURCE}"` >> $SUMMARYLOG 2>&1
     fi
@@ -207,25 +216,33 @@ if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
 	scp -P $SSHPORT ${DETAILLOG} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/"detail.log"
 fi
 
-if [ -z "$S" ]; then
+if [ -z "$S" ] && [ -d ${TARGET}/${TODAY} ]; then
 	cp ${DETAILLOG} ${TARGET}/${TODAY}/"detail.log"
 	chmod a+r  ${TARGET}/${TODAY}/"detail.log"
 fi
 
+if [ ${DRY_RUN} = 1 ]; then
+	echo "$0: --dry-run detected. Not running the following ln command ..."  >> $SUMMARYLOG
+fi
 # do not create new links if an error occurred ...
 if [ "$S" ] && [ "$TOSSH" ] && [ -z "$FROMSSH" ]; then
- 	$ECHO "$0: $SSH -p $SSHPORT -l $SSHUSER $TOSSH $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG  
-  $SSH -p $SSHPORT -l $SSHUSER $TOSSH "$LN -nsf \"$TARGET\"$TODAY \"$TARGET\"$LAST" >> $DETAILLOG 2>&1
- 	if [ $? -ne 0 ]; then
-    ERROR=4
- 	fi
+ 	$ECHO "$0: $SSH -p $SSHPORT -l $SSHUSER $TOSSH $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG 
+	if [ ${DRY_RUN} = 0 ]; then
+  	$SSH -p $SSHPORT -l $SSHUSER $TOSSH "$LN -nsf \"$TARGET\"$TODAY \"$TARGET\"$LAST" >> $DETAILLOG 2>&1
+	 	if [ $? -ne 0 ]; then
+  	  ERROR=4
+	 	fi
+	fi
 fi
+
 if ( [ "$S" ] && [ "$FROMSSH" ] && [ -z "$TOSSH" ] ) || ( [ -z "$S" ] );  then
  	$ECHO "$0: $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG
-  $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST  >> $DETAILLOG 2>&1
- 	if [ $? -ne 0 ]; then
-    ERROR=4
- 	fi
+	if [ ${DRY_RUN} = 0 ]; then
+	  $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST  >> $DETAILLOG 2>&1
+ 		if [ $? -ne 0 ]; then
+    	ERROR=4
+	 	fi
+	fi
 fi
 
 if [ ! ${ERROR} = 0 ]; then
