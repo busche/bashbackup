@@ -25,7 +25,7 @@ if [ 'x'$OSTYPE = 'xcygwin' ]; then
 	RSYNCCONF=(-HS -rltD --delete)
 else
 	echo "$0: Running in a Linux environment."
-RSYNCCONF=(-AHS -a --delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
+RSYNCCONF=(-HS -a --delete --exclude=/backupscripts/*.log --exclude=/home/postgres-datenbanken --exclude=/home/ismll-backups) # --dry-run)
 fi
 
 # to whom to send a mail
