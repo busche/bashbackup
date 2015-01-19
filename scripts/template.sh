@@ -28,7 +28,7 @@ else
 	RSYNCCONF=(-HS -a ) 
 fi
 # dummy initialization
-RSYNCOPTS=""
+RSYNCOPTS=()
 
 # to whom to send a mail
 MAILREC="me@host.com"
@@ -119,6 +119,10 @@ for OPT in "${RSYNCCONF[@]}" "${RSYNCOPTS[@]}"]} ; do
 	fi
 done
 
+if [ ${#RSYNCOPTS[@]} = 0 ]; then
+	RSYNCOPTS=""
+fi
+
 set -e # Abort on error
 set -u # Abort when unbound variables are used
 
@@ -196,7 +200,7 @@ for SOURCE in "${SOURCES[@]}"
       $ECHO "$0: $RSYNC ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG 
       $RSYNC ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC  >> $DETAILLOG 2>&1 
 			backup_status=$?
-			echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY"${SOURCE}"` >> $SUMMARYLOG 2>&1
+			echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY"/${SOURCE}"` >> $SUMMARYLOG 2>&1
     fi
 		if [ ! ${backup_status} = 0 ]; then
 			echo "$0: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
@@ -249,7 +253,7 @@ if [ ! ${ERROR} = 0 ]; then
   mexit ${ERROR}
 fi
 
-if [ ! 'x'${MAIL} = 'x' ]; then
+if [ ! 'x'${MAIL} = 'x' ] && [ ! 'x'$MAILREC = 'x' ]; then
 	echo "$0: Sending mail to $MAILREC ..."
 	echo "$0: Backup complete" >> $SUMMARYLOG
 	$MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
