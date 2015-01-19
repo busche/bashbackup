@@ -185,28 +185,45 @@ for SOURCE in "${SOURCES[@]}"
 		echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
 			# SSH connection from a host,  to local
-      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS[@]} } -xvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG
-			$RSYNC -e "$S" ${RSYNCOPTS[@]} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
-			backup_status=$?
+			rsynccommand="RSYNC -e "$S" ${RSYNCOPTS[@]} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC"
+			ducommand="du -sh \"$TARGET\"$TODAY\"/${SOURCE}\""
+#      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS[@]} } -xvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG
+#			$RSYNC -e "$S" ${RSYNCOPTS[@]} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
+#			backup_status=$?
     fi
     if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
 			# ssh connection to a server,  from local
-      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
-      $RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC >> $DETAILLOG 2>&1 
-			backup_status=$?
+			rsynccommand="RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC"
+			ducommand="${S} du -sh \"$TARGET\"$TODAY/${SOURCE}"
+#      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
+#      $RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC >> $DETAILLOG 2>&1 
+#			backup_status=$?
     fi
     if [ -z "$S" ]; then
 			# no ssh connection; backup locally
-			command="$RSYNC ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC >> $SUMMARYLOG"
-			$ECHO "$0: $command"
-			eval $command 
-			backup_status=$?
-			echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY"/${SOURCE}"` >> $SUMMARYLOG 2>&1
+			rsynccommand="$RSYNC ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC"
+			ducommand="du -sh \"$TARGET\"$TODAY\"/${SOURCE}\""
+		#	$ECHO "$0: $command" >> $DETAILLOG
+		#	eval $command  >> $SUMMARYLOG
+		#	backup_status=$?
+		#	echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY"/${SOURCE}"` >> $SUMMARYLOG 2>&1
     fi
+		# perform rsync
+		$ECHO "$0: $rsynccommand" >> $SUMMARYLOG
+		$ECHO "$0: $rsynccommand" >> $DETAILLOG
+		eval $rsynccommand  >> $DETAILLOG
+		backup_status=$?
+
 		if [ ! ${backup_status} = 0 ]; then
 			echo "$0: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
 			ERROR=3
 		fi
+
+		# perform backup size calculation
+		backup_size=`eval $ducommand | cut -d" " -f1`
+		echo -n "$0: Backup size of ${SOURCE} is "  >> $SUMMARYLOG 2>&1
+		echo $backup_size | cut -d" " -f1 >> $SUMMARYLOG 2>&1
+
 done
 
 echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `" >> $SUMMARYLOG
