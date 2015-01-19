@@ -23,7 +23,11 @@ if [ ! -f ${SCRIPT} ]; then
 fi
 
 TEST_BASE_DIR=${CONFIGS} ${SCRIPT} ${CONFIGS}/local.config
-
+if [ ! $? = 0 ]; then
+	# error while running backup script
+	echo "Backup script failed!"
+	exit 1
+fi
 diff --exclude=detail.log --exclude=summary.log tests/config.test_template/actual_target/????????_??????/ tests/config.test_template/expected_target/
 if [ ! $? = 0 ]; then
 	echo "Test failed!"
