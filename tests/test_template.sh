@@ -24,10 +24,11 @@ fi
 
 TEST_BASE_DIR=${CONFIGS} ${SCRIPT} ${CONFIGS}/local.config
 
-diff --exclude=detail.log tests/config.test_template/actual_target/????????_??????/ tests/config.test_template/expected_target/
+diff --exclude=detail.log --exclude=summary.log tests/config.test_template/actual_target/????????_??????/ tests/config.test_template/expected_target/
 if [ ! $? = 0 ]; then
 	echo "Test failed!"
 else
+	echo "Test successful!"
 	rm -rf tests/config.test_template/actual_target/*
 fi
 

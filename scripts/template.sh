@@ -197,8 +197,9 @@ for SOURCE in "${SOURCES[@]}"
     fi
     if [ -z "$S" ]; then
 			# no ssh connection; backup locally
-      $ECHO "$0: $RSYNC ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG 
-      $RSYNC ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" "$TARGET"$TODAY $INC  >> $DETAILLOG 2>&1 
+			command="$RSYNC ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC >> $SUMMARYLOG"
+			$ECHO "$0: $command"
+			eval $command 
 			backup_status=$?
 			echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY"/${SOURCE}"` >> $SUMMARYLOG 2>&1
     fi
@@ -223,6 +224,8 @@ fi
 if [ -z "$S" ] && [ -d ${TARGET}/${TODAY} ]; then
 	cp ${DETAILLOG} ${TARGET}/${TODAY}/"detail.log"
 	chmod a+r  ${TARGET}/${TODAY}/"detail.log"
+	cp ${SUMMARYLOG} ${TARGET}/${TODAY}/"summary.log"
+	chmod a+r  ${TARGET}/${TODAY}/"summary.log"
 fi
 
 if [ ${DRY_RUN} = 1 ]; then
