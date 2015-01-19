@@ -90,7 +90,7 @@ MAIL=`which mail`
 if [ 'x'${MAIL} = 'x' ]; then
 	# no mail program found!
 	echo "$0: no mail program found. Not sending any mail!"
-	unset MAILREC	
+	MAILREC=""
 fi 
 #"/usr/bin/mail"
 MKTEMP=`which mktemp`
