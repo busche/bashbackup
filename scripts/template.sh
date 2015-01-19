@@ -262,8 +262,8 @@ if [ ! 'x'${MAIL} = 'x' ] && [ ! 'x'$MAILREC = 'x' ]; then
 	$MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
 fi
 
-echo "$0: Now dumping the summary file..."
-cat $SUMMARYLOG
+#echo "$0: Now dumping the summary file..."
+#cat $SUMMARYLOG
 
 cleanup
 
