@@ -28,7 +28,7 @@ else
 	RSYNCCONF=(-HS -a ) 
 fi
 # dummy initialization
-SYNCOPTS=""
+RSYNCOPTS=""
 
 # to whom to send a mail
 MAILREC="me@host.com"
