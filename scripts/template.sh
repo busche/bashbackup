@@ -25,7 +25,7 @@ if [ 'x'$OSTYPE = 'xcygwin' ]; then
 	RSYNCCONF=(-HS -rltD --delete)
 else
 	echo "$0: Running in a Linux environment."
-	RSYNCCONF=(-AHS -a --delete)
+	RSYNCCONF=(-HS -a ) 
 fi
 # dummy initialization
 SYNCOPTS=""
