@@ -220,6 +220,7 @@ for SOURCE in "${SOURCES[@]}"
 			case ${backup_status} in
 				0)
 					echo "fine!"
+					ERROR=0
 					trial=${TRIALS} #break while
 					;;
 				*)
