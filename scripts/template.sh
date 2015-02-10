@@ -213,17 +213,21 @@ for SOURCE in "${SOURCES[@]}"
 		# perform rsync
 		$ECHO "$0: $rsynccommand" >> $SUMMARYLOG
 		$ECHO "$0: $rsynccommand" >> $DETAILLOG
-		eval $rsynccommand  >> $DETAILLOG
-		backup_status=$?
-		case ${backup_status} in
-			0)
-				echo "fine!"
-				;;
-			*)
-				echo "$0: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
-				ERROR=3
-				;;
-		esac
+		while [ ${trial} -lt ${TRIALS} ]; do
+			eval $rsynccommand  >> $DETAILLOG
+			backup_status=$?
+			case ${backup_status} in
+				0)
+					echo "fine!"
+					trial=${TRIALS} #break while
+					;;
+				*)
+					echo "$0: Failed ${trial} / ${TRIALS}: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
+					trial=$[$trial + 1]
+					ERROR=3
+					;;
+			esac
+		done
 
 		# perform backup size calculation
 		backup_size=`eval $ducommand | cut -d" " -f1`
