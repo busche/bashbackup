@@ -123,7 +123,6 @@ if [ ${#RSYNCOPTS[@]} = 0 ]; then
 	RSYNCOPTS=""
 fi
 
-set -e # Abort on error
 set -u # Abort when unbound variables are used
 
 LOCKFILE=$0.lock
