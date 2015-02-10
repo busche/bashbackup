@@ -50,6 +50,9 @@ TOSSH=""
 ERROR=0
 LOGDATEPATTERN=+%Y%m%d%H%M%S
 
+# number of trials per source to try to rsync
+TRIALS=3
+
 #
 # called on script end.
 function cleanup() {
@@ -179,7 +182,7 @@ if [ ${USE_SSH} = "yes" ]; then
 fi # of ${SSH} = yes
 for SOURCE in "${SOURCES[@]}"
   do
-  echo $SOURCE
+		trial=0
 		backup_status=0
 		echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
@@ -212,11 +215,15 @@ for SOURCE in "${SOURCES[@]}"
 		$ECHO "$0: $rsynccommand" >> $DETAILLOG
 		eval $rsynccommand  >> $DETAILLOG
 		backup_status=$?
-
-		if [ ! ${backup_status} = 0 ]; then
-			echo "$0: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
-			ERROR=3
-		fi
+		case ${backup_status} in
+			0)
+				echo "fine!"
+				;;
+			*)
+				echo "$0: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
+				ERROR=3
+				;;
+		esac
 
 		# perform backup size calculation
 		backup_size=`eval $ducommand | cut -d" " -f1`
