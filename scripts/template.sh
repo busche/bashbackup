@@ -213,6 +213,7 @@ for SOURCE in "${SOURCES[@]}"
 		# perform rsync
 		$ECHO "$0: $rsynccommand" >> $SUMMARYLOG
 		$ECHO "$0: $rsynccommand" >> $DETAILLOG
+
 		while [ ${trial} -lt ${TRIALS} ]; do
 			eval $rsynccommand  >> $DETAILLOG
 			backup_status=$?
@@ -230,10 +231,11 @@ for SOURCE in "${SOURCES[@]}"
 		done
 
 		# perform backup size calculation
-		backup_size=`eval $ducommand | cut -d" " -f1`
-		echo -n "$0: Backup size of ${SOURCE} is "  >> $SUMMARYLOG 2>&1
-		echo $backup_size | cut -d" " -f1 >> $SUMMARYLOG 2>&1
-
+		if [ ! $DRY_RUN = 0 ]; then
+			backup_size=`eval $ducommand | cut -d" " -f1`
+			echo -n "$0: Backup size of ${SOURCE} is "  >> $SUMMARYLOG 2>&1
+			echo $backup_size | cut -d" " -f1 >> $SUMMARYLOG 2>&1
+		fi
 done
 
 echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `" >> $SUMMARYLOG
