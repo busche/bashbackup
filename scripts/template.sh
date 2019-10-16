@@ -223,7 +223,7 @@ for SOURCE in "${SOURCES[@]}"
 
 		while [ ${trial} -lt ${TRIALS} ]; do
 			echo $rsynccommand
-			$rsynccommand  >> $DETAILLOG
+			#$rsynccommand  >> $DETAILLOG
 			backup_status=$?
 			case ${backup_status} in
 				0)
