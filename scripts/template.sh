@@ -20,6 +20,7 @@ SOURCES=(/root /etc /boot )
 
 # edit or comment with "#"
 DATEPATTERN=+%Y%m%d_%H%M%S
+DATEPATTERN=+%d
 if [ 'x'$OSTYPE = 'xcygwin' ]; then
 	echo "$0: I am running in a cygwin environment!"
 	RSYNCCONF=(-HS -rltD --delete)
@@ -28,7 +29,8 @@ else
 	RSYNCCONF=(-HS -a ) 
 fi
 # dummy initialization
-RSYNCOPTS=()
+#RSYNCOPTS=( --dry-run )
+RSYNCOPTS=(  )
 
 # to whom to send a mail
 MAILREC="me@host.com"
@@ -51,7 +53,7 @@ ERROR=0
 LOGDATEPATTERN=+%Y%m%d%H%M%S
 
 # number of trials per source to try to rsync
-TRIALS=3
+TRIALS=0
 
 #
 # called on script end.
@@ -115,7 +117,8 @@ fi
 LAST="last"; INC="--link-dest=../$LAST"
 
 DRY_RUN=0
-for OPT in "${RSYNCCONF[@]}" "${RSYNCOPTS[@]}"]} ; do
+for OPT in "${RSYNCCONF[@]}" "${RSYNCOPTS[@]}" ; do
+#for OPT in "${RSYNCCONF[@]}" "${RSYNCOPTS[@]}"]} ; do
 	if [ $OPT = '--dry-run' ]; then
 		echo "$0: --dry-run detected."
 		DRY_RUN=1
@@ -127,6 +130,7 @@ if [ ${#RSYNCOPTS[@]} = 0 ]; then
 fi
 
 set -u # Abort when unbound variables are used
+
 
 LOCKFILE=$0.lock
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $DETAILLOG
@@ -187,7 +191,9 @@ for SOURCE in "${SOURCES[@]}"
 		echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
 			# SSH connection from a host,  to local
-			rsynccommand="RSYNC -e "$S" ${RSYNCOPTS[@]} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC"
+			rsynccommand="$RSYNC -e \"$S \" ${RSYNCOPTS[@]} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC"
+			echo $rsynccommand
+			$RSYNC -e "$S" ${RSYNCOPTS[@]} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC
 			ducommand="du -sh \"$TARGET\"$TODAY\"/${SOURCE}\""
 #      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS[@]} } -xvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG
 #			$RSYNC -e "$S" ${RSYNCOPTS[@]} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC  >> $DETAILLOG
@@ -195,7 +201,8 @@ for SOURCE in "${SOURCES[@]}"
     fi
     if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
 			# ssh connection to a server,  from local
-			rsynccommand="RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC"
+			rsynccommand="$RSYNC -e \"$S \"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:$TARGET$TODAY $INC "
+			$RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:$TARGET$TODAY $INC
 			ducommand="${S} du -sh \"$TARGET\"$TODAY/${SOURCE}"
 #      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
 #      $RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:"\"$TARGET\"$TODAY" $INC >> $DETAILLOG 2>&1 
@@ -215,7 +222,8 @@ for SOURCE in "${SOURCES[@]}"
 		$ECHO "$0: $rsynccommand" >> $DETAILLOG
 
 		while [ ${trial} -lt ${TRIALS} ]; do
-			eval $rsynccommand  >> $DETAILLOG
+			echo $rsynccommand
+			$rsynccommand  >> $DETAILLOG
 			backup_status=$?
 			case ${backup_status} in
 				0)
@@ -237,9 +245,12 @@ for SOURCE in "${SOURCES[@]}"
 			echo -n "$0: Backup size of ${SOURCE} is "  >> $SUMMARYLOG 2>&1
 			echo $backup_size | cut -d" " -f1 >> $SUMMARYLOG 2>&1
 		fi
+		echo "Sleeping for 60 seconds"
+		sleep 60
 done
 
 echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `" >> $SUMMARYLOG
+echo "$0: Finished with ERROR = ${ERROR}"
 
 if [ ! ${ERROR} = 0 ]; then
 	mexit ${ERROR}
@@ -275,10 +286,11 @@ fi
 if ( [ "$S" ] && [ "$FROMSSH" ] && [ -z "$TOSSH" ] ) || ( [ -z "$S" ] );  then
  	$ECHO "$0: $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG
 	if [ ${DRY_RUN} = 0 ]; then
-	  $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST  >> $DETAILLOG 2>&1
- 		if [ $? -ne 0 ]; then
-    	ERROR=4
-	 	fi
+echo	  $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST # >> $DETAILLOG 2>&1
+		$LN -nsf "$TARGET"$TODAY "$TARGET"$LAST # >> $DETAILLOG 2>&1
+# 		if [ $? -ne 0 ]; then
+#    	ERROR=4
+#	 	fi
 	fi
 fi
 
@@ -293,7 +305,7 @@ if [ ! 'x'${MAIL} = 'x' ] && [ ! 'x'$MAILREC = 'x' ]; then
 fi
 
 #echo "$0: Now dumping the summary file..."
-#cat $SUMMARYLOG
+cat $SUMMARYLOG
 
 cleanup
 
