@@ -1,0 +1,14 @@
+#!/bin/bash
+echo "Checking disc usage of '$1'"
+if [ 'x'"$1" == 'x' ]; then
+    echo "Parameter missing. Please provide a subdirectory in format %mm%dd.  returning..."
+    exit 1
+fi
+BASE_DIR=/volumeUSB1/usbshare/zeusneu/
+du -sh ${BASE_DIR}/"$1"
+
+if [ ! 'x'"$2" == 'x' ]; then
+    echo "Calculating size diff between $2 and $1..."
+    du -sh ${BASE_DIR}/"$2" ${BASE_DIR}/"$1"
+fi
+
