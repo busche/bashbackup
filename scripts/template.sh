@@ -213,6 +213,7 @@ for SOURCE in "${SOURCES[@]}"
     fi
     if [ -z "$S" ]; then
                         # no ssh connection; backup locally
+						mkdir -p ${TARGET}
                         rsynccommand="$RSYNC ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC"
                         echo $rsynccommand
                         $RSYNC ${RSYNCOPTS[@]} -xvR "$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC >> ${DETAILLOG}
