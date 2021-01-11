@@ -251,13 +251,13 @@ for SOURCE in "${SOURCES[@]}"
                 done
 
                 # perform backup size calculation
-                if [ ! $DRY_RUN = 0 ] && [ $ERROR = 0 ]; then
-                        backup_size=`eval $ducommand | cut -d" " -f1`
-                        echo -n "$0: Backup size of ${SOURCE} is "  >> $SUMMARYLOG 2>&1
-                        echo $backup_size | cut -d" " -f1 >> $SUMMARYLOG 2>&1
-                        echo -n "$0: Backup size of ${SOURCE} is "  >> $DETAILLOG 2>&1
-                        echo $backup_size | cut -d" " -f1 >> $DETAILLOG 2>&1
-                fi
+                #if [ ! $DRY_RUN = 0 ] && [ $ERROR = 0 ]; then
+                #        backup_size=`eval $ducommand | cut -d" " -f1`
+                #        echo -n "$0: Backup size of ${SOURCE} is "  >> $SUMMARYLOG 2>&1
+                #        echo $backup_size | cut -d" " -f1 >> $SUMMARYLOG 2>&1
+                #        echo -n "$0: Backup size of ${SOURCE} is "  >> $DETAILLOG 2>&1
+                #        echo $backup_size | cut -d" " -f1 >> $DETAILLOG 2>&1
+                #fi
                 echo "Sleeping for 5 seconds"
                 sleep 5
 done
