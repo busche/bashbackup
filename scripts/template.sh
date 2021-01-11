@@ -55,6 +55,7 @@ LOGDATEPATTERN=+%Y%m%d%H%M%S
 # number of trials per source to try to rsync
 TRIALS=0
 
+
 #
 # called on script end.
 function cleanup() {
@@ -123,6 +124,10 @@ for OPT in "${RSYNCCONF[@]}" "${RSYNCOPTS[@]}" ; do
                 echo "$0: --dry-run detected."
                 DRY_RUN=1
         fi
+        if [ $OPT = '-x' ]; then
+                echo "$0: --dry-run detected."
+                DRY_RUN=1
+        fi
 done
 
 if [ ${#RSYNCOPTS[@]} = 0 ]; then
@@ -130,7 +135,7 @@ if [ ${#RSYNCOPTS[@]} = 0 ]; then
 fi
 
 set -u # Abort when unbound variables are used
-
+set -e #immediate exit if something fails, e.g., network connection terminated.
 
 LOCKFILE=$0.lock
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $DETAILLOG
@@ -260,14 +265,6 @@ done
 echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `" >> $SUMMARYLOG
 echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `" >> $DETAILLOG
 
-echo "$0: Trying to obtain the backup size ... I am assuming a remote git-shell and ~/git-shell-commands/du to be available ." >> $DETAILLOG
-echo "$0: stat.total_backup_size" >> $DETAILLOG
-echo $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
-$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
-
-echo $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du -sh \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
-$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du -s \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
-
 echo "$0: Finished with ERROR = ${ERROR}"
 
 if [ ! ${ERROR} = 0 ]; then
@@ -275,17 +272,22 @@ if [ ! ${ERROR} = 0 ]; then
 fi
 
 # copy log file.
+echo "DRY_RUN is ${DRY_RUN}"
 echo "Copying current detail.log logfile to backup target"
 if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
-        # ssh connection to a server,  from local
-        chmod 0777 ${DETAILLOG}
+    # ssh connection to a server,  from local
+    chmod 0777 ${DETAILLOG}
+	if [ ${DRY_RUN} = 0 ]; then
         $RSYNC ${RSYNCOPTS[@]} -xv ${DETAILLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/detail.log
+	fi
 fi
 echo "Copying current summary.log logfile to backup target"
 if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
-        # ssh connection to a server,  from local
-        chmod 0777 ${DETAILLOG}
+    # ssh connection to a server,  from local
+    chmod 0777 ${DETAILLOG}
+	if [ ${DRY_RUN} = 0 ]; then
         $RSYNC ${RSYNCOPTS[@]} -xv ${SUMMARYLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/summary.log
+	fi
 fi
 
 if [ -z "$S" ] && [ -d ${TARGET}/${TODAY} ]; then
@@ -327,9 +329,20 @@ echo      $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST # >> $DETAILLOG 2>&1
         fi
 fi
 
+set +e #do not exit if something fails, e.g., network connection terminated.
+
 if [ ! ${ERROR} = 0 ]; then
   mexit ${ERROR}
 fi
+
+echo "$0: Trying to obtain the backup size ... I am assuming a remote git-shell and ~/git-shell-commands/du to be available ." >> $DETAILLOG
+echo "$0: stat.total_backup_size" >> $DETAILLOG
+echo $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
+$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
+
+echo $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du -sh \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
+$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du -s \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
+
 
 if [ ! 'x'${MAIL} = 'x' ] && [ ! 'x'$MAILREC = 'x' ]; then
         echo "$0: Sending mail to $MAILREC ..."
