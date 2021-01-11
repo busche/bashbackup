@@ -124,7 +124,7 @@ for OPT in "${RSYNCCONF[@]}" "${RSYNCOPTS[@]}" ; do
                 echo "$0: --dry-run detected."
                 DRY_RUN=1
         fi
-        if [ $OPT = '-x' ]; then
+        if [ $OPT = '-n' ]; then
                 echo "$0: --dry-run detected."
                 DRY_RUN=1
         fi
