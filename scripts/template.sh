@@ -271,32 +271,6 @@ if [ ! ${ERROR} = 0 ]; then
         mexit ${ERROR}
 fi
 
-# copy log file.
-echo "DRY_RUN is ${DRY_RUN}"
-echo "Copying current detail.log logfile to backup target"
-if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
-    # ssh connection to a server,  from local
-    chmod 0777 ${DETAILLOG}
-	if [ ${DRY_RUN} = 0 ]; then
-        $RSYNC ${RSYNCOPTS[@]} -xv ${DETAILLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/detail.log
-	fi
-fi
-echo "Copying current summary.log logfile to backup target"
-if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
-    # ssh connection to a server,  from local
-    chmod 0777 ${DETAILLOG}
-	if [ ${DRY_RUN} = 0 ]; then
-        $RSYNC ${RSYNCOPTS[@]} -xv ${SUMMARYLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/summary.log
-	fi
-fi
-
-if [ -z "$S" ] && [ -d ${TARGET}/${TODAY} ]; then
-        cp ${DETAILLOG} ${TARGET}/${TODAY}/"detail.log"
-        chmod a+r  ${TARGET}/${TODAY}/"detail.log"
-        cp ${SUMMARYLOG} ${TARGET}/${TODAY}/"summary.log"
-        chmod a+r  ${TARGET}/${TODAY}/"summary.log"
-fi
-
 if [ ${DRY_RUN} = 1 ]; then
         echo "$0: --dry-run detected. Not running the following ln command ..."  >> $SUMMARYLOG
 fi
@@ -343,6 +317,32 @@ $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
 echo $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du -sh \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
 $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du -s \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
 
+# copy log file.
+echo "DRY_RUN is ${DRY_RUN}"
+echo "Copying current detail.log logfile to backup target"
+if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
+    # ssh connection to a server,  from local
+    chmod 0777 ${DETAILLOG}
+	if [ ${DRY_RUN} = 0 ]; then
+        $RSYNC ${RSYNCOPTS[@]} -xv ${DETAILLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/detail.log
+	fi
+fi
+echo "Copying current summary.log logfile to backup target"
+if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
+    # ssh connection to a server,  from local
+    chmod 0777 ${DETAILLOG}
+	if [ ${DRY_RUN} = 0 ]; then
+        $RSYNC ${RSYNCOPTS[@]} -xv ${SUMMARYLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/summary.log
+	fi
+fi
+
+if [ -z "$S" ] && [ -d ${TARGET}/${TODAY} ]; then
+        cp ${DETAILLOG} ${TARGET}/${TODAY}/"detail.log"
+        chmod a+r  ${TARGET}/${TODAY}/"detail.log"
+        cp ${SUMMARYLOG} ${TARGET}/${TODAY}/"summary.log"
+        chmod a+r  ${TARGET}/${TODAY}/"summary.log"
+fi
+
 
 if [ ! 'x'${MAIL} = 'x' ] && [ ! 'x'$MAILREC = 'x' ]; then
         echo "$0: Sending mail to $MAILREC ..."
@@ -351,7 +351,7 @@ if [ ! 'x'${MAIL} = 'x' ] && [ ! 'x'$MAILREC = 'x' ]; then
 fi
 
 #echo "$0: Now dumping the summary file..."
-cat $SUMMARYLOG
+#cat $SUMMARYLOG
 
 cleanup
 
