@@ -197,10 +197,16 @@ for SOURCE in "${SOURCES[@]}"
                 backup_status=0
                 echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
-                        # SSH connection from a host,  to local
-                        rsynccommand="$RSYNC -e \"$S \" ${RSYNCOPTS[@]} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC"
-                        echo $rsynccommand
-                        $RSYNC -e "$S" ${RSYNCOPTS[@]} -xvR "$FROMSSH:$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC >> ${DETAILLOG}
+                        # SSH connection from a host, to local
+                        # Build rsync arguments as an array (safe quoting)
+                        rsync_args=("$RSYNC" "-e" "$S")
+                        if declare -p RSYNCOPTS 2>/dev/null | grep -q "declare .*\-a"; then
+                                rsync_args+=("${RSYNCOPTS[@]}")
+                        elif [ -n "${RSYNCOPTS}" ]; then
+                                rsync_args+=("${RSYNCOPTS}")
+                        fi
+                        rsync_args+=("-xvR" "$FROMSSH:$SOURCE")
+                        rsync_args+=("${RSYNCCONF[@]}" "$TARGET$TODAY" "$INC")
 
                         ducommand="du -sh \"$TARGET\"$TODAY\"/${SOURCE}\""
 #      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS[@]} } -xvR \"$FROMSSH:$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC" >> $SUMMARYLOG
@@ -208,10 +214,16 @@ for SOURCE in "${SOURCES[@]}"
 #                       backup_status=$?
     fi
     if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
-                        # ssh connection to a server,  from local
+                        # ssh connection to a server, from local
                         echo "pounk"
-						rsynccommand="$RSYNC -e \"$S \"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:$TARGET$TODAY $INC "
-                        $RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:$TARGET$TODAY $INC  >> ${DETAILLOG}
+                        rsync_args=("$RSYNC" "-e" "$S")
+                        if declare -p RSYNCOPTS 2>/dev/null | grep -q "declare .*\-a"; then
+                                rsync_args+=("${RSYNCOPTS[@]}")
+                        elif [ -n "${RSYNCOPTS}" ]; then
+                                rsync_args+=("${RSYNCOPTS}")
+                        fi
+                        rsync_args+=("-xvR" "$SOURCE")
+                        rsync_args+=("${RSYNCCONF[@]}" "$TOSSH:$TARGET$TODAY" "$INC")
 
                         ducommand="${S} du -sh \"$TARGET\"$TODAY/${SOURCE}"
 #      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
@@ -220,10 +232,14 @@ for SOURCE in "${SOURCES[@]}"
     fi
     if [ -z "$S" ]; then
                         # no ssh connection; backup locally
-						mkdir -p ${TARGET}
-                        rsynccommand="$RSYNC ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} $TARGET$TODAY $INC"
-                        echo $rsynccommand
-                        $RSYNC ${RSYNCOPTS[@]} -xvR "$SOURCE" ${RSYNCCONF[@]} $TARGET$TODAY $INC >> ${DETAILLOG}
+                        mkdir -p ${TARGET}
+                        rsync_args=("$RSYNC")
+                        if declare -p RSYNCOPTS 2>/dev/null | grep -q "declare .*\-a"; then
+                                rsync_args+=("${RSYNCOPTS[@]}")
+                        elif [ -n "${RSYNCOPTS}" ]; then
+                                rsync_args+=("${RSYNCOPTS}")
+                        fi
+                        rsync_args+=("-xvR" "$SOURCE" "${RSYNCCONF[@]}" "$TARGET$TODAY" "$INC")
                         ducommand="du -sh \"$TARGET\"$TODAY\"/${SOURCE}\""
                 #       $ECHO "$0: $command" >> $DETAILLOG
                 #       eval $command  >> $SUMMARYLOG
@@ -231,25 +247,31 @@ for SOURCE in "${SOURCES[@]}"
                 #       echo "$0: Backup size of ${SOURCE} is "`du -sh "$TARGET"$TODAY"/${SOURCE}"` >> $SUMMARYLOG 2>&1
     fi
                 # perform rsync
-                $ECHO "$0: $rsynccommand" >> $SUMMARYLOG
-                $ECHO "$0: $rsynccommand" >> $DETAILLOG
+                # Log the actually executed rsync command using the argument array
+                $ECHO -n "$0: " >> $SUMMARYLOG
+                printf '%q ' "${rsync_args[@]}" >> $SUMMARYLOG
+                $ECHO "" >> $SUMMARYLOG
 
-                while [ ${trial} -lt ${TRIALS} ]; do
-                        echo $rsynccommand
-                        #$rsynccommand  >> $DETAILLOG
-                        backup_status=$?
-                        case ${backup_status} in
-                                0)
-                                        echo "fine!"
+                $ECHO -n "$0: " >> $DETAILLOG
+                printf '%q ' "${rsync_args[@]}" >> $DETAILLOG
+                $ECHO "" >> $DETAILLOG
+
+                # Execute rsync using the array. Respect TRIALS (0 means single try).
+                backup_status=1
+                while : ; do
+                        # Run rsync and append stdout/stderr to DETAILLOG
+                        "${rsync_args[@]}" >> ${DETAILLOG} 2>&1 || backup_status=$?
+                        if [ "$backup_status" = 0 ] || [ ${trial} -ge ${TRIALS} ]; then
+                                if [ "$backup_status" = 0 ]; then
                                         ERROR=0
-                                        trial=${TRIALS} #break while
-                                        ;;
-                                *)
-                                        echo "$0: Failed ${trial} / ${TRIALS}: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
-                                        trial=$[$trial + 1]
+                                else
                                         ERROR=3
-                                        ;;
-                        esac
+                                fi
+                                break
+                        else
+                                echo "$0: Failed ${trial} / ${TRIALS}: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
+                                trial=$((trial + 1))
+                        fi
                 done
 
                 # perform backup size calculation
