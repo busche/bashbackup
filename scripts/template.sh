@@ -67,11 +67,23 @@ TRIALS=0
 #
 # called on script end.
 function cleanup() {
-        echo -n "$0: Cleaning temporary files... "
-        rm -f ${LOCKFILE}
-        rm -f ${DETAILLOG}
-        rm -r ${SUMMARYLOG}
-        echo "OK"
+        log_detail "" "$0: Cleaning temporary files..."
+        if [ -n "${LOCKFILE}" ] && [ -f "${LOCKFILE}" ]; then
+                rm -f "${LOCKFILE}" || true
+                rc=$?
+                log_detail "$rc" "$0: removed lockfile ${LOCKFILE}"
+        fi
+        if [ -n "${DETAILLOG}" ] && [ -f "${DETAILLOG}" ]; then
+                rm -f "${DETAILLOG}" || true
+                rc=$?
+                log_detail "$rc" "$0: removed detail log ${DETAILLOG}"
+        fi
+        if [ -n "${SUMMARYLOG}" ] && [ -f "${SUMMARYLOG}" ]; then
+                rm -f "${SUMMARYLOG}" || true
+                rc=$?
+                log_detail "$rc" "$0: removed summary log ${SUMMARYLOG}"
+        fi
+        log_detail "" "$0: cleanup done"
 }
 
 # errorous end of the script. shows an error message and returns a value != 0,  passed as first argument.
@@ -137,8 +149,8 @@ function log_detail_trunc() {
 }
 
 if [ $# -gt 0 ]; then
-        # include the parameters from the first argument (pointing to a file) if give if given
-        echo "$0: Including definitions from $1 ..."
+        # include the parameters from the first argument (pointing to a file) if given
+        log_summary "" "$0: Including definitions from $1 ..."
         . $1
 fi
 
@@ -173,6 +185,11 @@ if [ 'x'${RSYNC} = 'x' ]; then
         echo "$0: fatal: no rsync found."
         exit 5
 fi
+
+# Log environment & configuration summary for debugging
+log_detail "" "$0: startup: pid=$$, user=$(whoami), cwd=$(pwd), args=$*"
+log_detail "" "$0: using RSYNC=$RSYNC SSH=$SSH DATEPATTERN=$DATEPATTERN LOGDATEPATTERN=$LOGDATEPATTERN"
+log_detail "" "$0: TARGET=$TARGET SOURCES=${SOURCES[*]} USE_SSH=$USE_SSH FROMSSH=$FROMSSH TOSSH=$TOSSH SSHUSER=$SSHUSER SSHPORT=$SSHPORT TRIALS=$TRIALS"
 
 LAST="last"; INC="--link-dest=../$LAST"
 
@@ -220,6 +237,7 @@ if [ -f ${LOCKFILE} ]; then
         mexit 1
 fi
 touch ${LOCKFILE}
+log_detail "" "$0: Created lockfile ${LOCKFILE} (pid=$$)"
 
 if [ ${USE_SSH} = "yes" ]; then
         echo "$0: checking ssh configuration ..."
@@ -246,7 +264,7 @@ fi
 if [ "${TARGET:${#TARGET}-1:1}" != "/" ]; then
   TARGET=$TARGET/
 fi
-echo "$0: Target is $TARGET"
+log_detail "" "$0: Target is $TARGET"
 
 TODAY=$($DATE ${DATEPATTERN})
 YESTERDAY=$($DATE -d "yesterday" ${DATEPATTERN})
@@ -322,6 +340,7 @@ for SOURCE in "${SOURCES[@]}"
                 # Log the actually executed rsync command using the argument array
                 log_summary "" "$0: ${rsync_args[*]}"
                 log_detail "" "$0: ${rsync_args[*]}"
+                log_detail "" "$0: Starting rsync for ${SOURCE} (attempt ${trial})"
 
                 # Execute rsync using the array. Respect TRIALS (0 means single try).
                 backup_status=1
@@ -467,6 +486,8 @@ if [ ! 'x'${MAIL} = 'x' ] && [ ! 'x'$MAILREC = 'x' ]; then
         echo "$0: Sending mail to $MAILREC ..."
         log_summary "" "$0: Backup complete"
         $MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
+        rc=$?
+        log_summary "$rc" "$0: mail send returned"
 fi
 
 #echo "$0: Now dumping the summary file..."
