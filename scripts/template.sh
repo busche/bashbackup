@@ -11,6 +11,14 @@
 #   4 An error ocurred during ln of the new backup folder
 #   5 If rsync was not found.
 #   6 If ssh was not found.
+#   7 RSYNCOPTS or RSYNCCONF not configured as Bash arrays (new check)
+
+# Important configuration notes:
+# - RSYNCCONF and RSYNCOPTS must be defined as Bash arrays, e.g.:
+#     RSYNCCONF=( -HS -a )
+#     RSYNCOPTS=( --dry-run )
+#   The script will exit with code 7 if either variable is not an array. This
+#   ensures safe, correct quoting when building the rsync argument array.
 
 # actual backup directory
 TARGET="/some/path/to/dailyBackups"
@@ -131,7 +139,20 @@ for OPT in "${RSYNCCONF[@]}" "${RSYNCOPTS[@]}" ; do
 done
 
 if [ ${#RSYNCOPTS[@]} = 0 ]; then
-        RSYNCOPTS=""
+        # keep RSYNCOPTS as an empty array (not a string) so later code can
+        # safely use "${RSYNCOPTS[@]}" without type errors
+        RSYNCOPTS=()
+fi
+
+# Ensure RSYNCOPTS and RSYNCCONF are arrays. If not, fail early.
+if ! declare -p RSYNCOPTS 2>/dev/null | grep -q "declare .* -a"; then
+        echo "$0: fatal: RSYNCOPTS is not an array. Please define RSYNCOPTS as a Bash array." >&2
+        mexit 7
+fi
+
+if ! declare -p RSYNCCONF 2>/dev/null | grep -q "declare .* -a"; then
+        echo "$0: fatal: RSYNCCONF is not an array. Please define RSYNCCONF as a Bash array." >&2
+        mexit 7
 fi
 
 set -u # Abort when unbound variables are used
