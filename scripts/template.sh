@@ -85,6 +85,57 @@ function mexit() {
         exit $1
 }
 
+# Logging helpers: write timestamped messages to SUMMARYLOG and DETAILLOG.
+# Usage:
+#   last_rc=$?; log_summary "$last_rc" "message"
+#   log_summary_trunc "$last_rc" "message"    # overwrite file
+# If last_rc is empty, rc is omitted.
+function log_summary() {
+        local rc="$1"
+        shift || true
+        if [ -z "${SUMMARYLOG+set}" ]; then
+                return
+        fi
+        if [ -n "$rc" ]; then
+                printf '%s %s (rc=%s)\n' "$($DATE '+%Y-%m-%d %H:%M:%S')" "$*" "$rc" >> "$SUMMARYLOG"
+        else
+                printf '%s %s\n' "$($DATE '+%Y-%m-%d %H:%M:%S')" "$*" >> "$SUMMARYLOG"
+        fi
+}
+
+function log_summary_trunc() {
+        local rc="$1"
+        shift || true
+        if [ -n "$rc" ]; then
+                printf '%s %s (rc=%s)\n' "$($DATE '+%Y-%m-%d %H:%M:%S')" "$*" "$rc" > "$SUMMARYLOG"
+        else
+                printf '%s %s\n' "$($DATE '+%Y-%m-%d %H:%M:%S')" "$*" > "$SUMMARYLOG"
+        fi
+}
+
+function log_detail() {
+        local rc="$1"
+        shift || true
+        if [ -z "${DETAILLOG+set}" ]; then
+                return
+        fi
+        if [ -n "$rc" ]; then
+                printf '%s %s (rc=%s)\n' "$($DATE '+%Y-%m-%d %H:%M:%S')" "$*" "$rc" >> "$DETAILLOG"
+        else
+                printf '%s %s\n' "$($DATE '+%Y-%m-%d %H:%M:%S')" "$*" >> "$DETAILLOG"
+        fi
+}
+
+function log_detail_trunc() {
+        local rc="$1"
+        shift || true
+        if [ -n "$rc" ]; then
+                printf '%s %s (rc=%s)\n' "$($DATE '+%Y-%m-%d %H:%M:%S')" "$*" "$rc" > "$DETAILLOG"
+        else
+                printf '%s %s\n' "$($DATE '+%Y-%m-%d %H:%M:%S')" "$*" > "$DETAILLOG"
+        fi
+}
+
 if [ $# -gt 0 ]; then
         # include the parameters from the first argument (pointing to a file) if give if given
         echo "$0: Including definitions from $1 ..."
@@ -159,8 +210,8 @@ set -u # Abort when unbound variables are used
 set -e #immediate exit if something fails, e.g., network connection terminated.
 
 LOCKFILE=$1.lock
-echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $DETAILLOG
-echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $SUMMARYLOG
+log_detail_trunc "" "$0: Backup starts at `$DATE ${LOGDATEPATTERN}`"
+log_summary_trunc "" "$0: Backup starts at `$DATE ${LOGDATEPATTERN}`"
 
 # check temp temp file. I won't start the backup if this file exists.
 #
@@ -216,7 +267,7 @@ for SOURCE in "${SOURCES[@]}"
 	echo "SOURCE=${SOURCE}"
                 trial=0
                 backup_status=0
-                echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
+                log_summary "" "$0: Currently (`$DATE ${LOGDATEPATTERN}`) working on ${SOURCE}"
      if [ "$S" ] && [ "$FROMSSH" ] && [ "${#TOSSH}" = 0 ]; then
                         # SSH connection from a host, to local
                         # Build rsync arguments as an array (safe quoting)
@@ -269,28 +320,29 @@ for SOURCE in "${SOURCES[@]}"
     fi
                 # perform rsync
                 # Log the actually executed rsync command using the argument array
-                $ECHO -n "$0: " >> $SUMMARYLOG
-                printf '%q ' "${rsync_args[@]}" >> $SUMMARYLOG
-                $ECHO "" >> $SUMMARYLOG
-
-                $ECHO -n "$0: " >> $DETAILLOG
-                printf '%q ' "${rsync_args[@]}" >> $DETAILLOG
-                $ECHO "" >> $DETAILLOG
+                log_summary "" "$0: ${rsync_args[*]}"
+                log_detail "" "$0: ${rsync_args[*]}"
 
                 # Execute rsync using the array. Respect TRIALS (0 means single try).
                 backup_status=1
                 while : ; do
                         # Run rsync and append stdout/stderr to DETAILLOG
-                        "${rsync_args[@]}" >> ${DETAILLOG} 2>&1 || backup_status=$?
+                        "${rsync_args[@]}" >> ${DETAILLOG} 2>&1
+                        backup_status=$?
+
+                        # Log the return code of the rsync command
+                        log_detail "$backup_status" "$0: rsync finished for source ${SOURCE} (attempt ${trial})"
+
                         if [ "$backup_status" = 0 ] || [ ${trial} -ge ${TRIALS} ]; then
                                 if [ "$backup_status" = 0 ]; then
                                         ERROR=0
                                 else
                                         ERROR=3
+                                        log_summary "$backup_status" "$0: Failed ${trial} / ${TRIALS}: Return status was ${backup_status}."
                                 fi
                                 break
                         else
-                                echo "$0: Failed ${trial} / ${TRIALS}: ERROR: Return status was ${backup_status}." >> ${SUMMARYLOG}
+                                log_summary "$backup_status" "$0: Failed ${trial} / ${TRIALS}: ERROR: Return status was ${backup_status}."
                                 trial=$((trial + 1))
                         fi
                 done
@@ -307,28 +359,36 @@ for SOURCE in "${SOURCES[@]}"
                 sleep 5
 done
 
-echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `" >> $SUMMARYLOG
-echo "$0: Finished the backup on `$DATE ${LOGDATEPATTERN} `" >> $DETAILLOG
+log_summary "" "$0: Finished the backup on `$DATE ${LOGDATEPATTERN}`"
+log_detail "" "$0: Finished the backup on `$DATE ${LOGDATEPATTERN}`"
 
-echo "$0: Finished with ERROR = ${ERROR}"
+log_summary "${ERROR}" "$0: Finished with ERROR = ${ERROR}"
 
 if [ ! ${ERROR} = 0 ]; then
         mexit ${ERROR}
 fi
 
 if [ ${DRY_RUN} = 1 ]; then
-        echo "$0: --dry-run detected. Not running the following ln command ..."  >> $SUMMARYLOG
+        log_summary "" "$0: --dry-run detected. Not running the following ln command ..."
 fi
 # do not create new links if an error occurred ...
 if [ "$S" ] && [ "$TOSSH" ] && [ -z "$FROMSSH" ]; then
-        $ECHO "$0: $SSH -p $SSHPORT -l $SSHUSER $TOSSH $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG
+        log_summary "" "$0: $SSH -p $SSHPORT -l $SSHUSER $TOSSH $LN -nsf $TARGET$TODAY $TARGET$LAST"
         if [ ${DRY_RUN} = 0 ]; then
-                $LN -nsf $TODAY $LAST
-                $RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$LAST" "${RSYNCCONF[@]}" $TOSSH:$TARGET # no INC
-                rm $LAST
-                if [ $? -ne 0 ]; then
-            ERROR=4
-                fi
+                                $LN -nsf $TODAY $LAST
+                                rc=$?
+                                log_detail "$rc" "$0: ln -nsf $TODAY $LAST (on local, before sending)"
+
+                                $RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$LAST" "${RSYNCCONF[@]}" $TOSSH:$TARGET # no INC
+                                rc=$?
+                                log_detail "$rc" "$0: rsync of LAST to remote returned"
+
+                                rm $LAST
+                                rc=$?
+                                if [ $rc -ne 0 ]; then
+                                        ERROR=4
+                                        log_summary "$rc" "$0: rm $LAST failed"
+                                fi
 
 #       $SSH -p $SSHPORT -l $SSHUSER $TOSSH "$LN -nsf \"$TARGET\"$TODAY \"$TARGET\"$LAST" >> $DETAILLOG 2>&1
 #               if [ $? -ne 0 ]; then
@@ -338,10 +398,12 @@ if [ "$S" ] && [ "$TOSSH" ] && [ -z "$FROMSSH" ]; then
 fi
 
 if ( [ "$S" ] && [ "$FROMSSH" ] && [ -z "$TOSSH" ] ) || ( [ -z "$S" ] );  then
-        $ECHO "$0: $LN -nsf $TARGET$TODAY $TARGET$LAST" >> $SUMMARYLOG
+        log_summary "" "$0: $LN -nsf $TARGET$TODAY $TARGET$LAST"
         if [ ${DRY_RUN} = 0 ]; then
 echo      $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST # >> $DETAILLOG 2>&1
                 $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST # >> $DETAILLOG 2>&1
+                rc=$?
+                log_detail "$rc" "$0: ln -nsf set last -> $TARGET$TODAY"
 #               if [ $? -ne 0 ]; then
 #       ERROR=4
 #               fi
@@ -354,44 +416,56 @@ if [ ! ${ERROR} = 0 ]; then
   mexit ${ERROR}
 fi
 
-echo "$0: Trying to obtain the backup size ... I am assuming a remote git-shell and ~/git-shell-commands/du to be available ." >> $DETAILLOG
-echo -n "$0: stat.total_backup_size" >> $DETAILLOG
-echo -n $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
-$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
+log_detail "" "$0: Trying to obtain the backup size ... I am assuming a remote git-shell and ~/git-shell-commands/du to be available ."
+log_detail "" "$0: stat.total_backup_size"
+log_detail "" "$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY"
+$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG 2>&1
+rc=$?
+log_detail "$rc" "$0: remote du finished (today,yesterday)"
 
-echo -n $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
-echo -n $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
+log_detail "" "$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY"
+$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du "$TARGET"$TODAY/ "$TARGET"$YESTERDAY >> $DETAILLOG 2>&1
+rc=$?
+log_detail "$rc" "$0: remote du finished (target paths)"
 
 # copy log file.
-echo "DRY_RUN is ${DRY_RUN}"
-echo "Copying current detail.log logfile to backup target"
+log_detail "" "DRY_RUN is ${DRY_RUN}"
+log_detail "" "Copying current detail.log logfile to backup target"
 if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
     # ssh connection to a server,  from local
     chmod 0777 ${DETAILLOG}
-	if [ ${DRY_RUN} = 0 ]; then
-        $RSYNC ${RSYNCOPTS[@]} -xv ${DETAILLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/detail.log
-	fi
+                if [ ${DRY_RUN} = 0 ]; then
+                        $RSYNC ${RSYNCOPTS[@]} -xv ${DETAILLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/detail.log
+                        rc=$?
+                        log_detail "$rc" "$0: rsync of detail.log to remote returned"
+                fi
 fi
-echo "Copying current summary.log logfile to backup target"
+log_detail "" "Copying current summary.log logfile to backup target"
 if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
     # ssh connection to a server,  from local
     chmod 0777 ${DETAILLOG}
-	if [ ${DRY_RUN} = 0 ]; then
-        $RSYNC ${RSYNCOPTS[@]} -xv ${SUMMARYLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/summary.log
-	fi
+                if [ ${DRY_RUN} = 0 ]; then
+                        $RSYNC ${RSYNCOPTS[@]} -xv ${SUMMARYLOG} ${RSYNCCONF[@]} ${SSHUSER}@${TOSSH}:${TARGET}/${TODAY}/summary.log
+                        rc=$?
+                        log_detail "$rc" "$0: rsync of summary.log to remote returned"
+                fi
 fi
 
 if [ -z "$S" ] && [ -d ${TARGET}/${TODAY} ]; then
         cp ${DETAILLOG} ${TARGET}/${TODAY}/"detail.log"
+        rc=$?
         chmod a+r  ${TARGET}/${TODAY}/"detail.log"
+        log_detail "$rc" "$0: Copied detail.log to ${TARGET}/${TODAY}/detail.log"
         cp ${SUMMARYLOG} ${TARGET}/${TODAY}/"summary.log"
+        rc=$?
         chmod a+r  ${TARGET}/${TODAY}/"summary.log"
+        log_summary "$rc" "$0: Copied summary.log to ${TARGET}/${TODAY}/summary.log"
 fi
 
 
 if [ ! 'x'${MAIL} = 'x' ] && [ ! 'x'$MAILREC = 'x' ]; then
         echo "$0: Sending mail to $MAILREC ..."
-        echo "$0: Backup complete" >> $SUMMARYLOG
+        log_summary "" "$0: Backup complete"
         $MAIL -s "Backup `hostname` $0 $1" $MAILREC < $SUMMARYLOG
 fi
 
