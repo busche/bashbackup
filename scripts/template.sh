@@ -137,7 +137,7 @@ fi
 set -u # Abort when unbound variables are used
 set -e #immediate exit if something fails, e.g., network connection terminated.
 
-LOCKFILE=$0.lock
+LOCKFILE=$1.lock
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $DETAILLOG
 echo "$0: Backup starts at "`${DATE} ${LOGDATEPATTERN}` > $SUMMARYLOG
 
@@ -192,6 +192,7 @@ if [ ${USE_SSH} = "yes" ]; then
 fi # of ${SSH} = yes
 for SOURCE in "${SOURCES[@]}"
   do
+	echo "SOURCE=${SOURCE}"
                 trial=0
                 backup_status=0
                 echo "$0: Currently (`$DATE ${LOGDATEPATTERN} `) working on ${SOURCE}" >> $SUMMARYLOG
@@ -208,8 +209,9 @@ for SOURCE in "${SOURCES[@]}"
     fi
     if [ "$S" ]  && [ "$TOSSH" ] && [  "${#FROMSSH}" = 0 ]; then
                         # ssh connection to a server,  from local
-                        rsynccommand="$RSYNC -e \"$S \"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:$TARGET$TODAY $INC "
-                        $RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:$TARGET$TODAY $INC >> ${DETAILLOG}
+                        echo "pounk"
+						rsynccommand="$RSYNC -e \"$S \"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:$TARGET$TODAY $INC "
+                        $RSYNC -e "$S"  ${RSYNCOPTS[@]} -xvR "$SOURCE" "${RSYNCCONF[@]}" $TOSSH:$TARGET$TODAY $INC  >> ${DETAILLOG}
 
                         ducommand="${S} du -sh \"$TARGET\"$TODAY/${SOURCE}"
 #      $ECHO "$0: $RSYNC -e \"$S\" ${RSYNCOPTS[@]} -xvR \"$SOURCE\" ${RSYNCCONF[@]} \"$TOSSH:$TARGET$TODAY\" $INC " >> $SUMMARYLOG
@@ -310,12 +312,12 @@ if [ ! ${ERROR} = 0 ]; then
 fi
 
 echo "$0: Trying to obtain the backup size ... I am assuming a remote git-shell and ~/git-shell-commands/du to be available ." >> $DETAILLOG
-echo "$0: stat.total_backup_size" >> $DETAILLOG
-echo $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
+echo -n "$0: stat.total_backup_size" >> $DETAILLOG
+echo -n $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
 $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du $TODAY $YESTERDAY >> $DETAILLOG
 
-echo $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
-$SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
+echo -n $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
+echo -n $SSH -p $SSHPORT ${SSHUSER}@${TOSSH} du \"$TARGET\"$TODAY/ \"$TARGET\"$YESTERDAY >> $DETAILLOG
 
 # copy log file.
 echo "DRY_RUN is ${DRY_RUN}"
