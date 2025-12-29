@@ -186,10 +186,31 @@ if [ 'x'${RSYNC} = 'x' ]; then
         exit 5
 fi
 
-# Log environment & configuration summary for debugging
-log_detail "" "$0: startup: pid=$$, user=$(whoami), cwd=$(pwd), args=$*"
-log_detail "" "$0: using RSYNC=$RSYNC SSH=$SSH DATEPATTERN=$DATEPATTERN LOGDATEPATTERN=$LOGDATEPATTERN"
-log_detail "" "$0: TARGET=$TARGET SOURCES=${SOURCES[*]} USE_SSH=$USE_SSH FROMSSH=$FROMSSH TOSSH=$TOSSH SSHUSER=$SSHUSER SSHPORT=$SSHPORT TRIALS=$TRIALS"
+# Log environment & configuration summary for debugging (one variable per line)
+log_detail "" "$0: startup.pid=$$"
+log_detail "" "$0: startup.user=$(whoami)"
+log_detail "" "$0: startup.cwd=$(pwd)"
+log_detail "" "$0: startup.args=$*"
+
+# Tools / patterns
+log_detail "" "$0: RSYNC=$RSYNC"
+log_detail "" "$0: SSH=$SSH"
+log_detail "" "$0: DATEPATTERN=$DATEPATTERN"
+log_detail "" "$0: LOGDATEPATTERN=$LOGDATEPATTERN"
+
+# Configuration values
+log_detail "" "$0: TARGET=$TARGET"
+idx=0
+for s in "${SOURCES[@]}"; do
+        log_detail "" "$0: SOURCE[$idx]=$s"
+        idx=$((idx+1))
+done
+log_detail "" "$0: USE_SSH=$USE_SSH"
+log_detail "" "$0: FROMSSH=$FROMSSH"
+log_detail "" "$0: TOSSH=$TOSSH"
+log_detail "" "$0: SSHUSER=$SSHUSER"
+log_detail "" "$0: SSHPORT=$SSHPORT"
+log_detail "" "$0: TRIALS=$TRIALS"
 
 LAST="last"; INC="--link-dest=../$LAST"
 
