@@ -20,7 +20,7 @@ SOURCES=(/root /etc /boot )
 
 # edit or comment with "#"
 DATEPATTERN=+%Y%m%d_%H%M%S
-DATEPATTERN=+%d
+DATEPATTERN=+%d  # gets overridden by config file.
 if [ 'x'$OSTYPE = 'xcygwin' ]; then
         echo "$0: I am running in a cygwin environment!"
         RSYNCCONF=(-HS -rltD --delete)
