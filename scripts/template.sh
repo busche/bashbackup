@@ -148,6 +148,35 @@ function log_detail_trunc() {
         fi
 }
 
+# Rsync error code descriptions for better logging and debugging
+# Based on rsync documentation: see 'man rsync' section EXIT VALUES
+function rsync_error_description() {
+        local rc="$1"
+        case "$rc" in
+                0)   echo "Success" ;;
+                1)   echo "Syntax or usage error" ;;
+                2)   echo "Protocol incompatibility" ;;
+                3)   echo "Errors selecting input/output files, dirs" ;;
+                4)   echo "Requested action not supported: an attempt was made to manipulate 64-bit files on a platform that cannot support them; or an option was specified that is not supported on this build of rsync" ;;
+                5)   echo "Error starting client-server protocol" ;;
+                6)   echo "Daemon unable to append to log-file" ;;
+                10)  echo "Error in socket I/O" ;;
+                11)  echo "Error in file I/O" ;;
+                12)  echo "Error in rsync protocol data stream" ;;
+                13)  echo "Errors with program diagnostics" ;;
+                14)  echo "Error in IPC code" ;;
+                20)  echo "Received SIGUSR1 or SIGINT" ;;
+                21)  echo "Some error returned by waitpid()" ;;
+                22)  echo "Error allocating core memory buffers" ;;
+                23)  echo "Partial transfer due to error" ;;
+                24)  echo "Partial transfer due to vanished source files" ;;
+                25)  echo "The --max-delete limit stopped deletions" ;;
+                30)  echo "Timeout in data send/receive" ;;
+                35)  echo "Timeout waiting for daemon connection" ;;
+                *)   echo "Unknown error code: $rc" ;;
+        esac
+}
+
 if [ $# -gt 0 ]; then
         # include the parameters from the first argument (pointing to a file) if given
         log_summary "" "$0: Including definitions from $1 ..."
@@ -185,6 +214,11 @@ if [ 'x'${RSYNC} = 'x' ]; then
         echo "$0: fatal: no rsync found."
         exit 5
 fi
+
+# Initialize logs EARLY - before any log_detail() calls
+# This ensures all log_detail() and log_summary() calls have valid file paths
+log_detail_trunc "" "$0: Log initialized"
+log_summary_trunc "" "$0: Log initialized"
 
 # Log environment & configuration summary for debugging (one variable per line)
 log_detail "" "$0: startup.pid=$$"
@@ -247,11 +281,14 @@ if ! ( : "${RSYNCCONF[@]}" ) 2>/dev/null; then
 fi
 
 set -u # Abort when unbound variables are used
-set -e #immediate exit if something fails, e.g., network connection terminated.
+# Do NOT use 'set -e' globally - we need custom error handling in the rsync loop
+# set -e #immediate exit if something fails, e.g., network connection terminated.
 
 LOCKFILE=$1.lock
-log_detail_trunc "" "$0: Backup starts at `$DATE ${LOGDATEPATTERN}`"
-log_summary_trunc "" "$0: Backup starts at `$DATE ${LOGDATEPATTERN}`"
+
+# Log that backup process is starting
+log_detail "" "$0: Backup starts at `$DATE ${LOGDATEPATTERN}`"
+log_summary "" "$0: Backup starts at `$DATE ${LOGDATEPATTERN}`"
 
 # check temp temp file. I won't start the backup if this file exists.
 #
@@ -343,7 +380,7 @@ for SOURCE in "${SOURCES[@]}"
                         rsync_args=("$RSYNC")
                         # RSYNCOPTS and RSYNCCONF are guaranteed to be arrays (checked earlier)
                         rsync_args+=("${RSYNCOPTS[@]}")
-                        rsync_args+=("-xvR" "$SOURCE" "${RSYNCCONF[@]}" "$TARGET$TODAY" "$INC")
+                        rsync_args+=("-xvR" "${RSYNCCONF[@]}" "$SOURCE" "$TARGET$TODAY" "$INC")
                         ducommand="du -sh \"$TARGET\"$TODAY\"/${SOURCE}\""
                 #       $ECHO "$0: $command" >> $DETAILLOG
                 #       eval $command  >> $SUMMARYLOG
@@ -357,28 +394,36 @@ for SOURCE in "${SOURCES[@]}"
                 log_detail "" "$0: Starting rsync for ${SOURCE} (attempt ${trial})"
 
                 # Execute rsync using the array. Respect TRIALS (0 means single try).
+                # Disable 'set -e' for this section so we can handle rsync errors gracefully
+                set +e
                 backup_status=1
                 while : ; do
                         # Run rsync and append stdout/stderr to DETAILLOG
                         "${rsync_args[@]}" >> ${DETAILLOG} 2>&1
                         backup_status=$?
 
-                        # Log the return code of the rsync command
-                        log_detail "$backup_status" "$0: rsync finished for source ${SOURCE} (attempt ${trial})"
+                        # Log the return code of the rsync command with description
+                        local rsync_msg="$0: rsync finished for source ${SOURCE} (attempt ${trial})"
+                        local rsync_desc="$(rsync_error_description $backup_status)"
+                        log_detail "$backup_status" "$rsync_msg - reason: $rsync_desc"
 
                         if [ "$backup_status" = 0 ] || [ ${trial} -ge ${TRIALS} ]; then
                                 if [ "$backup_status" = 0 ]; then
                                         ERROR=0
+                                        log_summary "" "$0: Successful backup for ${SOURCE}"
                                 else
                                         ERROR=3
-                                        log_summary "$backup_status" "$0: Failed ${trial} / ${TRIALS}: Return status was ${backup_status}."
+                                        local rsync_desc_summary="$(rsync_error_description $backup_status)"
+                                        log_summary "$backup_status" "$0: Failed backup for ${SOURCE} after ${trial} / ${TRIALS} attempts - rsync error: $rsync_desc_summary"
                                 fi
                                 break
                         else
-                                log_summary "$backup_status" "$0: Failed ${trial} / ${TRIALS}: ERROR: Return status was ${backup_status}."
+                                local rsync_desc_retry="$(rsync_error_description $backup_status)"
+                                log_summary "$backup_status" "$0: Failed attempt ${trial} / ${TRIALS} for ${SOURCE} - rsync error: $rsync_desc_retry (retrying...)"
                                 trial=$((trial + 1))
                         fi
                 done
+                set -e
 
                 # perform backup size calculation
                 #if [ ! $DRY_RUN = 0 ] && [ $ERROR = 0 ]; then
