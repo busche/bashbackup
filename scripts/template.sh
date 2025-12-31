@@ -234,14 +234,16 @@ if [ ${#RSYNCOPTS[@]} = 0 ]; then
 fi
 
 # Ensure RSYNCOPTS and RSYNCCONF are arrays. If not, fail early.
-if ! declare -p RSYNCOPTS 2>/dev/null | grep -q "declare .* -a"; then
-        echo "$0: fatal: RSYNCOPTS is not an array. Please define RSYNCOPTS as a Bash array." >&2
-        mexit 7
+# Use ${VAR[@]} syntax test: if this works without error, VAR is an array.
+# This is more robust than 'declare -p' across different Bash versions.
+if ! ( : "${RSYNCOPTS[@]}" ) 2>/dev/null; then
+	echo "$0: fatal: RSYNCOPTS is not an array. Please define RSYNCOPTS as a Bash array." >&2
+	mexit 7
 fi
 
-if ! declare -p RSYNCCONF 2>/dev/null | grep -q "declare .* -a"; then
-        echo "$0: fatal: RSYNCCONF is not an array. Please define RSYNCCONF as a Bash array." >&2
-        mexit 7
+if ! ( : "${RSYNCCONF[@]}" ) 2>/dev/null; then
+	echo "$0: fatal: RSYNCCONF is not an array. Please define RSYNCCONF as a Bash array." >&2
+	mexit 7
 fi
 
 set -u # Abort when unbound variables are used
@@ -311,11 +313,8 @@ for SOURCE in "${SOURCES[@]}"
                         # SSH connection from a host, to local
                         # Build rsync arguments as an array (safe quoting)
                         rsync_args=("$RSYNC" "-e" "$S")
-                        if declare -p RSYNCOPTS 2>/dev/null | grep -q "declare .*\-a"; then
-                                rsync_args+=("${RSYNCOPTS[@]}")
-                        elif [ -n "${RSYNCOPTS}" ]; then
-                                rsync_args+=("${RSYNCOPTS}")
-                        fi
+                        # RSYNCOPTS and RSYNCCONF are guaranteed to be arrays (checked earlier)
+                        rsync_args+=("${RSYNCOPTS[@]}")
                         rsync_args+=("-xvR" "$FROMSSH:$SOURCE")
                         rsync_args+=("${RSYNCCONF[@]}" "$TARGET$TODAY" "$INC")
 
@@ -328,11 +327,8 @@ for SOURCE in "${SOURCES[@]}"
                         # ssh connection to a server, from local
                         echo "pounk"
                         rsync_args=("$RSYNC" "-e" "$S")
-                        if declare -p RSYNCOPTS 2>/dev/null | grep -q "declare .*\-a"; then
-                                rsync_args+=("${RSYNCOPTS[@]}")
-                        elif [ -n "${RSYNCOPTS}" ]; then
-                                rsync_args+=("${RSYNCOPTS}")
-                        fi
+                        # RSYNCOPTS and RSYNCCONF are guaranteed to be arrays (checked earlier)
+                        rsync_args+=("${RSYNCOPTS[@]}")
                         rsync_args+=("-xvR" "$SOURCE")
                         rsync_args+=("${RSYNCCONF[@]}" "$TOSSH:$TARGET$TODAY" "$INC")
 
@@ -345,11 +341,8 @@ for SOURCE in "${SOURCES[@]}"
                         # no ssh connection; backup locally
                         mkdir -p ${TARGET}
                         rsync_args=("$RSYNC")
-                        if declare -p RSYNCOPTS 2>/dev/null | grep -q "declare .*\-a"; then
-                                rsync_args+=("${RSYNCOPTS[@]}")
-                        elif [ -n "${RSYNCOPTS}" ]; then
-                                rsync_args+=("${RSYNCOPTS}")
-                        fi
+                        # RSYNCOPTS and RSYNCCONF are guaranteed to be arrays (checked earlier)
+                        rsync_args+=("${RSYNCOPTS[@]}")
                         rsync_args+=("-xvR" "$SOURCE" "${RSYNCCONF[@]}" "$TARGET$TODAY" "$INC")
                         ducommand="du -sh \"$TARGET\"$TODAY\"/${SOURCE}\""
                 #       $ECHO "$0: $command" >> $DETAILLOG
