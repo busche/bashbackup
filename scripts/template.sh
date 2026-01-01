@@ -403,8 +403,8 @@ for SOURCE in "${SOURCES[@]}"
                         backup_status=$?
 
                         # Log the return code of the rsync command with description
-                        local rsync_msg="$0: rsync finished for source ${SOURCE} (attempt ${trial})"
-                        local rsync_desc="$(rsync_error_description $backup_status)"
+                        rsync_msg="$0: rsync finished for source ${SOURCE} (attempt ${trial})"
+                        rsync_desc="$(rsync_error_description $backup_status)"
                         log_detail "$backup_status" "$rsync_msg - reason: $rsync_desc"
 
                         if [ "$backup_status" = 0 ] || [ ${trial} -ge ${TRIALS} ]; then
