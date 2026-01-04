@@ -413,12 +413,12 @@ for SOURCE in "${SOURCES[@]}"
                                         log_summary "" "$0: Successful backup for ${SOURCE}"
                                 else
                                         ERROR=3
-                                        local rsync_desc_summary="$(rsync_error_description $backup_status)"
+                                        rsync_desc_summary="$(rsync_error_description $backup_status)"
                                         log_summary "$backup_status" "$0: Failed backup for ${SOURCE} after ${trial} / ${TRIALS} attempts - rsync error: $rsync_desc_summary"
                                 fi
                                 break
                         else
-                                local rsync_desc_retry="$(rsync_error_description $backup_status)"
+                                rsync_desc_retry="$(rsync_error_description $backup_status)"
                                 log_summary "$backup_status" "$0: Failed attempt ${trial} / ${TRIALS} for ${SOURCE} - rsync error: $rsync_desc_retry (retrying...)"
                                 trial=$((trial + 1))
                         fi
