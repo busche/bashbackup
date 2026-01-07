@@ -86,15 +86,38 @@ function cleanup() {
         log_detail "" "$0: cleanup done"
 }
 
+# Convert ERROR code to human-readable description
+function error_description() {
+        local err="$1"
+        case "$err" in
+                0)   echo "No error - backup successful" ;;
+                1)   echo "Current backup ongoing (lockfile exists)" ;;
+                2)   echo "SSH configuration error (both FROMSSH and TOSSH set/unset)" ;;
+                3)   echo "An error occurred during rsync" ;;
+                4)   echo "An error occurred during ln (symlink creation)" ;;
+                5)   echo "rsync not found" ;;
+                6)   echo "ssh not found" ;;
+                7)   echo "RSYNCOPTS or RSYNCCONF not configured as Bash arrays" ;;
+                *)   echo "Unknown error code: $err" ;;
+        esac
+}
+
 # errorous end of the script. shows an error message and returns a value != 0,  passed as first argument.
 function mexit() {
+        local exit_code="$1"
+        local err_desc="$(error_description $exit_code)"
+        
         echo "$0: Error. Some error occurred while performing the backup."
+        echo "$0: ERROR=${exit_code}: ${err_desc}"
+        
+        log_summary "$exit_code" "$0: FINAL ERROR: ${err_desc}"
+        
         if [ ! 'x'${MAIL} = 'x' ]; then
                 $MAIL -s "Error Backup $0 $1" $MAILREC < $SUMMARYLOG
         fi
         cleanup
 
-        exit $1
+        exit $exit_code
 }
 
 # Logging helpers: write timestamped messages to SUMMARYLOG and DETAILLOG.
@@ -414,6 +437,7 @@ for SOURCE in "${SOURCES[@]}"
                                 else
                                         ERROR=3
                                         rsync_desc_summary="$(rsync_error_description $backup_status)"
+                                        echo "$0: ERROR=${ERROR}: rsync failed for ${SOURCE} - ${rsync_desc_summary}" >&2
                                         log_summary "$backup_status" "$0: Failed backup for ${SOURCE} after ${trial} / ${TRIALS} attempts - rsync error: $rsync_desc_summary"
                                 fi
                                 break
@@ -465,6 +489,7 @@ if [ "$S" ] && [ "$TOSSH" ] && [ -z "$FROMSSH" ]; then
                                 rc=$?
                                 if [ $rc -ne 0 ]; then
                                         ERROR=4
+                                        echo "$0: ERROR=${ERROR}: Failed to remove temporary symlink $LAST - $(error_description $ERROR)" >&2
                                         log_summary "$rc" "$0: rm $LAST failed"
                                 fi
 
@@ -478,13 +503,14 @@ fi
 if ( [ "$S" ] && [ "$FROMSSH" ] && [ -z "$TOSSH" ] ) || ( [ -z "$S" ] );  then
         log_summary "" "$0: $LN -nsf $TARGET$TODAY $TARGET$LAST"
         if [ ${DRY_RUN} = 0 ]; then
-echo      $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST # >> $DETAILLOG 2>&1
                 $LN -nsf "$TARGET"$TODAY "$TARGET"$LAST # >> $DETAILLOG 2>&1
                 rc=$?
                 log_detail "$rc" "$0: ln -nsf set last -> $TARGET$TODAY"
-#               if [ $? -ne 0 ]; then
-#       ERROR=4
-#               fi
+                if [ $rc -ne 0 ]; then
+                        ERROR=4
+                        echo "$0: ERROR=${ERROR}: Failed to create symlink $TARGET$LAST -> $TARGET$TODAY - $(error_description $ERROR)" >&2
+                        log_summary "$rc" "$0: ln -nsf $TARGET$LAST -> $TARGET$TODAY failed"
+                fi
         fi
 fi
 
